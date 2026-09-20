@@ -44,7 +44,7 @@ test('tier two unlocks once on round 3 and tier three once on round 5',()=>{
   for(const tank of Object.values(state.tanks)){assert.deepEqual(tank.unlockedTiers,[1,2]);assert.equal(tank.ammo.armorPiercing,2);assert.equal(tank.ammo.quake,2);}
   state.tanks.player.ammo.quake=1;unlockWeaponsForRound(state,3);unlockWeaponsForRound(state,4);assert.equal(state.tanks.player.ammo.quake,1);
   completeTurns(state,4);assert.equal(state.round,5);
-  for(const tank of Object.values(state.tanks)){assert.ok(tank.unlockedTiers.includes(3));assert.equal(tank.ammo.drill,2);assert.equal(tank.ammo.hive,2);}
+  for(const tank of Object.values(state.tanks)){assert.ok(tank.unlockedTiers.includes(3));assert.equal(tank.ammo.drill,2);assert.equal(tank.ammo.pulse,2);assert.equal(tank.ammo.hive,0);}
   state.tanks.player.ammo.drill=1;unlockWeaponsForRound(state,8);assert.equal(state.tanks.player.ammo.drill,1);
 });
 
@@ -52,6 +52,27 @@ test('projectile follows a reproducible ballistic arc and eventually collides',(
   const state=createMatch({seed:11});setAim(state,'player',{angle:55,power:72});const projectile=createProjectile(state,'player'),startY=projectile.y,startVx=projectile.vx;let highest=startY,result;
   for(let i=0;i<1800;i++){result=stepProjectile(projectile,state,1/120);highest=Math.min(highest,projectile.y);if(result.type!=='none')break;}
   assert.ok(highest<startY-50);assert.equal(projectile.vx,startVx);assert.notEqual(result.type,'none');assert.equal(projectile.alive,false);
+});
+
+test('all weapons share the calibration projectile flight path',()=>{
+  const state=createMatch({seed:1101}),samples=WEAPON_IDS.map(weaponId=>{
+    const projectile=createProjectile(state,'player',{weaponId,angle:58,power:74});
+    stepProjectile(projectile,state,.1);
+    return {weaponId,x:projectile.x,y:projectile.y,vx:projectile.vx,vy:projectile.vy};
+  });
+  const reference=samples[0];
+  for(const sample of samples.slice(1)){
+    assert.equal(sample.vx,reference.vx,`${sample.weaponId} must use calibration vx`);
+    assert.equal(sample.vy,reference.vy,`${sample.weaponId} must use calibration vy`);
+    assert.equal(sample.x,reference.x,`${sample.weaponId} must use calibration x curve`);
+    assert.equal(sample.y,reference.y,`${sample.weaponId} must use calibration y curve`);
+  }
+});
+
+test('practice matches allow every weapon with unlimited ammunition',()=>{
+  const state=createMatch({seed:1102});state.practice=true;const tank=state.tanks.player;
+  tank.unlockedTiers=[1,2,3,4];for(const id of WEAPON_IDS)tank.ammo[id]=Infinity;
+  for(const weaponId of WEAPON_IDS){state.phase='aim';state.turn='player';tank.weapon=weaponId;assert.equal(selectWeapon(state,'player',weaponId),true);const shots=fireWeapon(state,'player');assert.equal(shots.length,1);assert.equal(tank.ammo[weaponId],Infinity);}
 });
 
 test('free heading can fire backward and downward without changing AI elevation rules',()=>{
@@ -63,7 +84,7 @@ test('free heading can fire backward and downward without changing AI elevation 
 
 test('all seven weapons are defined with the requested 1+2+2+2 tiers',()=>{
   assert.equal(WEAPON_IDS.length,7);assert.deepEqual([1,2,3,4].map(tier=>WEAPON_IDS.filter(id=>WEAPONS[id].tier===tier).length),[1,2,2,2]);
-  assert.equal(WEAPONS.calibration.ammo,Infinity);assert.equal(WEAPONS.meteor.tier,4);assert.equal(WEAPONS.pulse.tier,4);
+  assert.equal(WEAPONS.calibration.ammo,Infinity);assert.equal(WEAPONS.pulse.tier,3);assert.equal(WEAPONS.hive.tier,4);
 });
 
 test('weapon damage and blast radius rise clearly with every tier',()=>{
@@ -98,18 +119,22 @@ test('hive shell splits at its apex into exactly five independently moving bombl
   assert.equal(result.type,'split');const children=splitHiveProjectile(projectile);assert.equal(children.length,5);assert.ok(children.every(item=>item.bomblet&&item.alive));assert.equal(new Set(children.map(item=>item.vx)).size,5);
 });
 
-test('hive volley damage against one tank is capped at its tier-three limit',()=>{
+test('hive volley damage against one tank is capped at its tier-four limit',()=>{
   const state=createMatch({seed:15}),enemy=state.tanks.enemy;enemy.x=1000;enemy.y=400;
   for(let i=0;i<5;i++)resolveExplosion(state,{x:enemy.x,y:enemy.y-10,owner:'player',weaponId:'hive',volleyId:77,bomblet:true});
   assert.equal(enemy.hp,100-HIVE_DAMAGE_CAP);assert.equal(state.tanks.player.damageDone,HIVE_DAMAGE_CAP);
 });
 
-test('裂变弹命中地形并测试核爆下坠加速',()=>{
+test('裂变弹命中地形且核爆弹不再改变基础弹道',()=>{
   const state=createMatch({seed:16});state.terrain.points.fill(500);for(const tank of Object.values(state.tanks)){tank.y=485;tank.slope=0;}
   const drill=createProjectile(state,'player',{weaponId:'drill',angle:45,power:45});let drilled=false,result;
   for(let i=0;i<1800;i++){result=stepProjectile(drill,state,1/120);if(result.type==='drill')drilled=true;if(['terrain','tank','out'].includes(result.type))break;}
   assert.equal(drilled,false);assert.equal(result.type,'terrain');
-  const meteor=createProjectile(state,'player',{weaponId:'meteor',angle:70,power:45});meteor.vy=10;const before=meteor.vy;stepProjectile(meteor,state,.1);assert.ok(meteor.vy-before>GRAVITY*.18);
+  const calibration=createProjectile(state,'player',{weaponId:'calibration',angle:70,power:45});
+  const meteor=createProjectile(state,'player',{weaponId:'meteor',angle:70,power:45});
+  stepProjectile(calibration,state,.1);stepProjectile(meteor,state,.1);
+  assert.equal(meteor.vx,calibration.vx);assert.equal(meteor.vy,calibration.vy);
+  assert.equal(meteor.x,calibration.x);assert.equal(meteor.y,calibration.y);
 });
 
 test('引力弹不再施加必中或燃料惩罚',()=>{
@@ -175,9 +200,9 @@ test('every supply is assigned to a tank reachable within zero to two full fuel 
 });
 
 test('supply rewards are deterministic and approach 50/25/25 over many seeds',()=>{
-  const counts={health:0,meteor:0,pulse:0};
+  const counts={health:0,meteor:0,hive:0};
   for(let seed=1;seed<=1200;seed++){const supply=dropSupply(createMatch({seed}));counts[supply.reward==='health'?'health':supply.weaponId]++;}
-  assert.ok(counts.health>520&&counts.health<680);assert.ok(counts.meteor>240&&counts.meteor<360);assert.ok(counts.pulse>240&&counts.pulse<360);
+  assert.ok(counts.health>520&&counts.health<680);assert.ok(counts.meteor>240&&counts.meteor<360);assert.ok(counts.hive>240&&counts.hive<360);
   const a=dropSupply(createMatch({seed:1234})),b=dropSupply(createMatch({seed:1234}));assert.deepEqual({x:a.x,reward:a.reward,weaponId:a.weaponId},{x:b.x,reward:b.reward,weaponId:b.weaponId});
 });
 
@@ -185,7 +210,7 @@ test('landed supply heals at most 30 or grants exactly one tier-four round',()=>
   const state=createMatch({seed:24}),tank=state.tanks.player;tank.hp=82;
   state.supplies=[{id:1,x:tank.x,y:tank.y-10,landed:true,reward:'health',collected:false,destroyed:false}];collectSupplies(state,'player');assert.equal(tank.hp,100);
   const healing=consumeEvents(state).find(event=>event.type==='pickup');assert.equal(healing.amount,18);
-  state.supplies=[{id:2,x:tank.x,y:tank.y-10,landed:true,reward:'ammo',weaponId:'meteor',collected:false,destroyed:false}];collectSupplies(state,'player');assert.equal(tank.ammo.meteor,1);assert.equal(tank.ammo.pulse,0);
+  state.supplies=[{id:2,x:tank.x,y:tank.y-10,landed:true,reward:'ammo',weaponId:'meteor',collected:false,destroyed:false}];collectSupplies(state,'player');assert.equal(tank.ammo.meteor,1);assert.equal(tank.ammo.hive,0);
 });
 
 test('full-health supply never disappears without a reward',()=>{
@@ -193,7 +218,7 @@ test('full-health supply never disappears without a reward',()=>{
   state.supplies=[{id:3,x:tank.x,y:tank.y-10,landed:true,reward:'health',collected:false,destroyed:false}];
   collectSupplies(state,'player');
   assert.equal(state.supplies.length,0);
-  assert.equal(tank.ammo.meteor+tank.ammo.pulse,1);
+  assert.equal(tank.ammo.meteor+tank.ammo.hive,1);
   assert.equal(consumeEvents(state).find(event=>event.type==='pickup').amount,1);
 });
 
@@ -232,7 +257,7 @@ test('team 引力弹沿真实弹道飞行',()=>{
 });
 
 test('authoritative team 引力弹消耗弹药并记录爆炸',()=>{
-  const state=createTeamMatch({seed:812});state.round=3;state.tanks.A1.ammo.pulse=1;state.tanks.A1.weapon='pulse';setAim(state,'A1',{heading:270,power:20});
+  const state=createTeamMatch({seed:812});state.round=3;state.tanks.A1.unlockedTiers=[1,2,3];state.tanks.A1.ammo.pulse=1;state.tanks.A1.weapon='pulse';setAim(state,'A1',{heading:270,power:20});
   const shot=resolveTeamShot(state,'A1');
   assert.equal(shot.weaponId,'pulse');assert.equal(state.tanks.A1.ammo.pulse,0);assert.equal(state.turn,'B1');assert.ok(shot.impacts.length>=1);
 });

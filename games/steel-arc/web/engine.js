@@ -3,6 +3,9 @@ export const WORLD_WIDTH = 2560;
 export const WORLD_HEIGHT = 720;
 export const TERRAIN_STEP = 2;
 export const GRAVITY = 310;
+// Every shell uses the calibration shell's launch model. Weapon identity only
+// changes what happens on impact (damage, blast, terrain, fire, split, etc.).
+export const CALIBRATION_FLIGHT = Object.freeze({speedBase:300,speedPerPower:5,gravity:GRAVITY});
 export const BASE_FUEL = 87.5;
 export const PULSE_FUEL = 52.5;
 export const SUPPLY_INTERVAL = 3;
@@ -22,13 +25,13 @@ export const AI_LEVELS=Object.freeze({
 export const normalizeDifficulty=value=>Object.hasOwn(AI_LEVELS,value)?value:'normal';
 
 export const WEAPONS = Object.freeze({
-  calibration: Object.freeze({id:'calibration',key:1,tier:1,name:'校准弹',short:'校准',role:'稳定试射',damage:24,blast:40,crater:32,speed:1.05,ammo:Infinity,color:'#ffd35a'}),
-  armorPiercing: Object.freeze({id:'armorPiercing',key:2,tier:2,name:'反弹棱镜弹',short:'棱镜',role:'碰壁反弹两次',damage:42,blast:60,crater:34,speed:1.08,ammo:2,color:'#ff7859'}),
-  quake: Object.freeze({id:'quake',key:3,tier:2,name:'黏着燃烧弹',short:'燃烧',role:'黏着并持续灼烧',damage:34,blast:62,crater:48,craterDepth:28,speed:.96,ammo:2,color:'#f2a457'}),
-  drill: Object.freeze({id:'drill',key:4,tier:3,name:'地脉裂变弹',short:'裂变',role:'沿地面扩散裂缝',damage:64,blast:94,crater:118,craterDepth:78,speed:.9,ammo:2,color:'#d75cff'}),
-  hive: Object.freeze({id:'hive',key:5,tier:3,name:'蜂巢母弹',short:'分裂',role:'五弹覆盖',damage:58,blast:92,crater:38,speed:.98,ammo:2,color:'#8ef779'}),
-  meteor: Object.freeze({id:'meteor',key:6,tier:4,name:'核爆弹',short:'核爆',role:'超广域毁灭',damage:115,blast:190,crater:170,craterDepth:115,speed:.86,ammo:0,color:'#ff4b32'}),
-  pulse: Object.freeze({id:'pulse',key:7,tier:4,name:'引力坍缩弹',short:'引力',role:'吸附敌人与炮弹后爆炸',damage:82,blast:126,crater:70,craterDepth:48,speed:.92,ammo:0,color:'#66eaff'}),
+  calibration: Object.freeze({id:'calibration',key:1,tier:1,name:'校准弹',short:'校准',role:'稳定试射',damage:24,blast:40,crater:32,ammo:Infinity,color:'#ffd35a'}),
+  armorPiercing: Object.freeze({id:'armorPiercing',key:2,tier:2,name:'反弹棱镜弹',short:'棱镜',role:'碰壁反弹两次',damage:42,blast:60,crater:34,ammo:2,color:'#ff7859'}),
+  quake: Object.freeze({id:'quake',key:3,tier:2,name:'黏着燃烧弹',short:'燃烧',role:'黏着并持续灼烧',damage:34,blast:62,crater:48,craterDepth:28,ammo:2,color:'#f2a457'}),
+  drill: Object.freeze({id:'drill',key:4,tier:3,name:'地脉裂变弹',short:'裂变',role:'沿地面扩散裂缝',damage:64,blast:94,crater:118,craterDepth:78,ammo:2,color:'#d75cff'}),
+  pulse: Object.freeze({id:'pulse',key:5,tier:3,name:'引力坍缩弹',short:'引力',role:'吸附敌人与炮弹后爆炸',damage:82,blast:126,crater:70,craterDepth:48,ammo:2,color:'#66eaff'}),
+  meteor: Object.freeze({id:'meteor',key:6,tier:4,name:'核爆弹',short:'核爆',role:'超广域毁灭',damage:115,blast:190,crater:170,craterDepth:115,ammo:0,color:'#ff4b32'}),
+  hive: Object.freeze({id:'hive',key:7,tier:4,name:'蜂巢母弹',short:'分裂',role:'五弹覆盖',damage:98,blast:150,crater:58,ammo:0,color:'#8ef779'}),
 });
 export const WEAPON_IDS=Object.freeze(Object.keys(WEAPONS));
 
@@ -86,7 +89,7 @@ export function unlockWeaponsForRound(state,round=state.round){
 }
 
 export function selectWeapon(state,tankId,weaponId){
-  const tank=state.tanks[tankId];if(!tank||!WEAPONS[weaponId]||state.phase!=='aim'||state.turn!==tankId||!isWeaponAvailable(tank,weaponId,state.round))return false;
+  const tank=state.tanks[tankId];if(!tank||!WEAPONS[weaponId]||state.phase!=='aim'||state.turn!==tankId||(!state.practice&&!isWeaponAvailable(tank,weaponId,state.round)))return false;
   tank.weapon=weaponId;return true;
 }
 export function setAim(state,tankId,{angle,power,heading}){const tank=state.tanks[tankId];if(!tank||state.phase!=='aim'||state.turn!==tankId)return false;if(Number.isFinite(angle))tank.angle=clamp(angle,10,85);if(Number.isFinite(heading))tank.heading=((heading%360)+360)%360;if(Number.isFinite(power))tank.power=clamp(power,20,100);return true;}
@@ -98,9 +101,9 @@ export function collectSupplies(state,tankId){
     if(supply.reward==='health'){
       const restored=Math.min(30,tank.maxHp-tank.hp);
       if(restored>0){tank.hp+=restored;collected.push(pushEvent(state,{type:'pickup',tankId,reward:'health',amount:restored,supplyId:supply.id}));}
-      else {const weaponId=stateRandom(state)<.5?'meteor':'pulse';tank.ammo[weaponId]=(tank.ammo[weaponId]??0)+1;collected.push(pushEvent(state,{type:'pickup',tankId,reward:'ammo',weaponId,amount:1,supplyId:supply.id,converted:true}));}
+      else {const weaponId=stateRandom(state)<.5?'meteor':'hive';tank.ammo[weaponId]=(tank.ammo[weaponId]??0)+1;collected.push(pushEvent(state,{type:'pickup',tankId,reward:'ammo',weaponId,amount:1,supplyId:supply.id,converted:true}));}
     } else {
-      const weaponId=WEAPONS[supply.weaponId]?supply.weaponId:(stateRandom(state)<.5?'meteor':'pulse');tank.ammo[weaponId]=(tank.ammo[weaponId]??0)+1;collected.push(pushEvent(state,{type:'pickup',tankId,reward:'ammo',weaponId,amount:1,supplyId:supply.id}));
+      const weaponId=WEAPONS[supply.weaponId]?supply.weaponId:(stateRandom(state)<.5?'meteor':'hive');tank.ammo[weaponId]=(tank.ammo[weaponId]??0)+1;collected.push(pushEvent(state,{type:'pickup',tankId,reward:'ammo',weaponId,amount:1,supplyId:supply.id}));
     }
   }
   state.supplies=state.supplies.filter(item=>!item.collected&&!item.destroyed);return collected;
@@ -129,7 +132,7 @@ function homingTarget(state,ownerId,preferredId){
 
 export function createProjectile(state,tankId,{angle,power,weaponId,angleOffset=0}={}){
   const tank=state.tanks[tankId],weapon=WEAPONS[weaponId||tank.weapon];if(!tank||!weapon)throw Error('Invalid projectile');
-  const freeHeading=angle==null&&Number.isFinite(tank.heading),shotAngle=clamp(angle??tank.angle,10,85),heading=freeHeading?tank.heading+angleOffset:(tank.direction===1?shotAngle+angleOffset:180-shotAngle-angleOffset),shotPower=clamp(power??tank.power,20,100),tip=barrelTip(tank,shotAngle,heading),speed=(300+shotPower*5)*weapon.speed,radians=heading*Math.PI/180;
+  const freeHeading=angle==null&&Number.isFinite(tank.heading),shotAngle=clamp(angle??tank.angle,10,85),heading=freeHeading?tank.heading+angleOffset:(tank.direction===1?shotAngle+angleOffset:180-shotAngle-angleOffset),shotPower=clamp(power??tank.power,20,100),tip=barrelTip(tank,shotAngle,heading),speed=CALIBRATION_FLIGHT.speedBase+shotPower*CALIBRATION_FLIGHT.speedPerPower,radians=heading*Math.PI/180;
   return {x:tip.x,y:tip.y,previousX:tip.x,previousY:tip.y,vx:Math.cos(radians)*speed,vy:-Math.sin(radians)*speed,age:0,owner:tankId,weaponId:weapon.id,alive:true,mode:'flight',falling:false,volleyId:state.volleySerial,bounces:0};
 }
 
@@ -149,8 +152,8 @@ function advanceProjectile(projectile,state,dt){
     projectile.drillElapsed+=dt;const progress=Math.min(1,projectile.drillElapsed/.18);projectile.x=projectile.drillStartX+projectile.drillDX*36*progress;projectile.y=projectile.drillStartY+projectile.drillDY*36*progress;
     if(progress>=1){projectile.alive=false;return {type:'terrain',x:projectile.x,y:projectile.y,drilled:true};}return {type:'none'};
   }
-  const oldVy=projectile.vy;if(projectile.weaponId==='meteor'&&oldVy>=0)projectile.falling=true;
-  const gravity=projectile.weaponId==='meteor'&&projectile.falling?GRAVITY*1.9:GRAVITY;
+  const oldVy=projectile.vy;
+  const gravity=CALIBRATION_FLIGHT.gravity;
   projectile.vy+=gravity*dt;projectile.x+=projectile.vx*dt;projectile.y+=projectile.vy*dt;projectile.age+=dt;
   if(projectile.weaponId==='hive'&&!projectile.bomblet&&oldVy<0&&projectile.vy>=0){projectile.alive=false;return {type:'split',x:projectile.x,y:projectile.y};}
   if(projectile.x<-30||projectile.x>WORLD_WIDTH+30||projectile.y>WORLD_HEIGHT+30){projectile.alive=false;return {type:'out',x:projectile.x,y:Math.min(projectile.y,WORLD_HEIGHT)};}
@@ -185,7 +188,7 @@ export function resolveExplosion(state,projectile){
     damages[tank.id]=amount;tank.hp=Math.max(0,tank.hp-amount);
     if(amount>0&&tank.id!==projectile.owner){const owner=state.tanks[projectile.owner];owner.hits++;owner.damageDone+=amount;if(projectile.weaponId==='quake'){tank.status.burnTurns=2;tank.status.burnDamage=8;}}
   }
-  if(projectile.weaponId==='pulse')for(const tank of Object.values(state.tanks)){if(tank.id===projectile.owner||tank.hp<=0)continue;const dx=explosion.x-tank.x,dy=explosion.y-(tank.y-10),distance=Math.hypot(dx,dy);if(distance<explosion.radius*1.45&&distance>1){const pull=Math.min(42,(explosion.radius*1.45-distance)*.34);tank.x=clamp(tank.x+dx/distance*pull,46,state.terrain.width-46);settleTank(tank,state.terrain);}}
+  if(projectile.weaponId==='pulse')for(const tank of Object.values(state.tanks)){if(tank.id===projectile.owner||tank.hp<=0||tank.isTarget)continue;const dx=explosion.x-tank.x,dy=explosion.y-(tank.y-10),distance=Math.hypot(dx,dy);if(distance<explosion.radius*1.45&&distance>1){const pull=Math.min(42,(explosion.radius*1.45-distance)*.34);tank.x=clamp(tank.x+dx/distance*pull,46,state.terrain.width-46);settleTank(tank,state.terrain);}}
   deformTerrain(state.terrain,{x:explosion.x,y:explosion.y,radius:weapon.crater,depth:weapon.craterDepth??weapon.crater});for(const tank of Object.values(state.tanks))settleTank(tank,state.terrain);
   if(projectile.weaponId==='quake'){state.fireZones??=[];state.fireZones.push({id:`${state.volleySerial}:${state.completedTurns}`,x:explosion.x,y:terrainHeightAt(state.terrain,explosion.x)-3,radius:FIRE_ZONE_RADIUS,expiresAt:state.completedTurns+(state.turnOrder?.length||2)*2,owner:projectile.owner});state.fireZones=state.fireZones.slice(-6);}
   for(const supply of state.supplies)if(!supply.destroyed&&!supply.collected&&Math.hypot(supply.x-explosion.x,supply.y-explosion.y)<weapon.blast+18){supply.destroyed=true;pushEvent(state,{type:'supplyDestroyed',supplyId:supply.id,x:supply.x,y:supply.y});}
@@ -193,7 +196,7 @@ export function resolveExplosion(state,projectile){
 }
 
 export function fireWeapon(state,tankId){
-  const tank=state.tanks[tankId];if(!tank||state.phase!=='aim'||state.turn!==tankId||!isWeaponAvailable(tank,tank.weapon,state.round))return [];
+  const tank=state.tanks[tankId];if(!tank||state.phase!=='aim'||state.turn!==tankId||(!state.practice&&!isWeaponAvailable(tank,tank.weapon,state.round)))return [];
   if(finiteAmmo(tank.weapon))tank.ammo[tank.weapon]--;tank.shots++;state.phase='flight';state.volleySerial++;
   beginTrajectory(state,tankId);
   const projectile=createProjectile(state,tankId);projectile.volleyId=state.volleySerial;return [projectile];
@@ -248,7 +251,7 @@ function findSupplyX(state){
 
 export function dropSupply(state){
   if(state.supplies.length>=2){const oldest=state.supplies.shift();pushEvent(state,{type:'supplyExpired',supplyId:oldest.id,x:oldest.x,y:oldest.y});}
-  const placement=findSupplyX(state),x=placement.x,reward=stateRandom(state)<.5?'health':'ammo',weaponId=reward==='ammo'?(stateRandom(state)<.5?'meteor':'pulse'):null,supply={id:state.nextSupplyId++,x,y:-70,targetY:terrainHeightAt(state.terrain,x)-13,dropProgress:0,landed:false,collected:false,destroyed:false,reward,weaponId,createdTurn:state.completedTurns,targetTankId:placement.targetTankId};
+  const placement=findSupplyX(state),x=placement.x,reward=stateRandom(state)<.5?'health':'ammo',weaponId=reward==='ammo'?(stateRandom(state)<.5?'meteor':'hive'):null,supply={id:state.nextSupplyId++,x,y:-70,targetY:terrainHeightAt(state.terrain,x)-13,dropProgress:0,landed:false,collected:false,destroyed:false,reward,weaponId,createdTurn:state.completedTurns,targetTankId:placement.targetTankId};
   state.supplies.push(supply);pushEvent(state,{type:'supplyDrop',supplyId:supply.id,x});return supply;
 }
 export function hasFallingSupply(state){return state.supplies.some(item=>!item.landed&&!item.destroyed&&!item.collected);}
