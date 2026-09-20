@@ -56,3 +56,8 @@ The game logic, SVG board, airplane controls, and synthesized Web Audio effects 
 ## Campus Festival / 学园祭奇妙物语
 
 The campus board layout, rules engine, UI, and synthesized sound are project code. Anime character names and inspired decorative motifs do not imply endorsement. Original official character pictures are an optional local installation in `games/anime-campus/web/assets/official/`, excluded from Git and from the project MIT license. Source URLs, hashes and display viewports are recorded in `games/anime-campus/assets-sources.json`; see [asset details](games/anime-campus/SOURCES.md).
+
+## Turning Sanctuary / 旋转归途
+
+`games/turning-sanctuary/web/` is a Godot 4.7.2 Web export of the project's own 3D rotating-cube puzzle, contributed as a build artifact rather than hand-written front-end code. The bundle embeds the Godot Engine runtime (MIT / Expat, full notice in `games/turning-sanctuary/licenses/Godot-Engine-COPYRIGHT.txt`), Noto Sans SC and Noto Sans Math subsets (SIL OFL 1.1, notice in the same folder), and CC0 1.0 music and UI sound effects by tricksntraps, The Cynic Project, Yoiyami and Kenney. The card cover image is a screenshot of the game itself. Rules, levels, models and UI are original work; no published board game artwork, scans or rulebook text are included. Sources and licences: [game sources](games/turning-sanctuary/SOURCES.md).
+

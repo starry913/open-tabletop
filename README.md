@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/DanTargaryen/open-tabletop/actions/workflows/ci.yml/badge.svg)](https://github.com/DanTargaryen/open-tabletop/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/Code-MIT-d2b77c)](LICENSE)
 
-一个可以自己运行、继续扩展的开源网页游戏合集。**现已包含德州扑克、璀璨宝石·宝可梦特别款、出包魔法师、飞行棋、暗膛协议、钢铁远征与校园祭冒险棋**：支持单人本地 AI、同屏玩法或创建房间与朋友联机。
+一个可以自己运行、继续扩展的开源网页游戏合集。**现已包含德州扑克、璀璨宝石·宝可梦特别款、出包魔法师、飞行棋、暗膛协议、钢铁远征、校园祭冒险棋与旋转归途**：支持单人本地 AI、同屏玩法或创建房间与朋友联机。
 
 [English](README.en.md) · [添加游戏](docs/adding-a-game.md) · [架构说明](docs/architecture.md) · [参与贡献](CONTRIBUTING.md)
 
@@ -10,11 +10,11 @@
 
 ## 先玩一局
 
-**[打开游戏大厅](https://velvet-poker-friends.linming-dracarys.chatgpt.site/)**，从七款游戏中选择单人模式、同屏玩法或好友房。
+**[打开游戏大厅](https://velvet-poker-friends.linming-dracarys.chatgpt.site/)**，从八款游戏中选择单人模式、同屏玩法或好友房。
 
 [宝可梦特别款 · 单人冒险](https://velvet-poker-friends.linming-dracarys.chatgpt.site/games/splendor/) · [宝可梦特别款 · 好友联机](https://velvet-poker-friends.linming-dracarys.chatgpt.site/games/splendor/online) · [德州扑克试玩](https://velvet-poker-friends.linming-dracarys.chatgpt.site)
 
-统一首页已部署到现有 Sites 域名；七款游戏均支持好友房，飞行棋还支持 2–4 人同屏。钢铁远征是 2D 电脑端游戏，移动使用键盘，瞄准、选弹、开火与菜单同时支持鼠标和键盘。原游戏直达路径及旧的扑克房间邀请链接继续可用。
+统一首页已部署到现有 Sites 域名；其中七款游戏支持好友房，飞行棋还支持 2–4 人同屏。钢铁远征是 2D 电脑端游戏，移动使用键盘，瞄准、选弹、开火与菜单同时支持鼠标和键盘。原游戏直达路径及旧的扑克房间邀请链接继续可用。
 
 德州扑克包含：
 
@@ -61,6 +61,10 @@
 ## 钢铁远征
 
 原创 2D 横版回合制坦克炮战。使用 `A/D` 移动，在左下弹弓盘中向后拖动并朝反方向发射，也可用 `W/S` 与 `Q/E` 微调方向和力度。四档七种炮弹按回合解锁，补给会恢复生命或带来稀有四档弹；爆炸会造成范围伤害并永久改变本局地形。除单人规则 AI 外，好友房提供 A1、B1、A2、B2 四个位置，真人可自由更换空位，房主可手动添加 AI，默认不添加。支持 1 对 1、2 对 1、两名真人对两名 AI；单人和多人共用简单、普通、困难三档 AI、镜头、弹道与补给逻辑。服务端按 `A1 → B1 → A2 → B2` 权威结算移动、弹道、伤害和地形。详见 [游戏说明](games/steel-arc/README.md)。
+
+## 旋转归途
+
+3D 空间解谜：站在 3×3×3 魔方之城的**表面**上，转动任意一层让城随之重组，收齐散落的符印走到会移动的家门。单人单机，没有联机模式。这一款是 Godot 4.7.2 的 Web 导出产物（single-threaded、无 GDExtension），首次加载约 65 MB，直接打开 `/games/turning-sanctuary/index.html` 就能玩。详见 [游戏说明](games/turning-sanctuary/README.md) 与 [来源与许可](games/turning-sanctuary/SOURCES.md)。
 
 ## 本地运行
 
@@ -124,7 +128,7 @@ npm test
 npm run build:static
 ```
 
-测试覆盖七款游戏的规则引擎，以及七款联机游戏的房间逻辑、隐藏信息投影、同步和根服务器。静态构建会将资源复制到 `.dist/public`；单人钢铁远征可直接静态运行，七款游戏的联机功能需要提供 `/api/poker`、`/api/splendor`、`/api/abracada`、`/api/aeroplane`、`/api/buckshot`、`/api/steel-arc` 与 `/api/anime-campus` 的 Node 或 Worker + D1 后端。
+测试覆盖七款游戏的规则引擎，以及七款联机游戏的房间逻辑、隐藏信息投影、同步和根服务器；旋转归途作为构建产物只参与目录登记与静态路由的断言。静态构建会将资源复制到 `.dist/public`；单人钢铁远征与旋转归途可直接静态运行，七款游戏的联机功能需要提供 `/api/poker`、`/api/splendor`、`/api/abracada`、`/api/aeroplane`、`/api/buckshot`、`/api/steel-arc` 与 `/api/anime-campus` 的 Node 或 Worker + D1 后端。
 
 默认入口是 `server/index.mjs`，适合在自己的 Node 环境中运行。仓库也提供可选的 Cloudflare 适配器：
 
