@@ -104,11 +104,12 @@ test('timeout forces a shot at the opponent and unauthenticated polls cannot adv
 test('compensation is server-authoritative, survives polling, and only the weak seat may choose',async()=>{
   const f=await setup();await start(f);
   const stored=f.store.rows.get(f.code);
-  stored.room.game.hp={player:2,ai:5};stored.room.game.turn='ai';stored.room.game.ammo=[];
-  stored.room.game.pendingReload={beforeLighting:stored.room.game.lighting,pendingTurn:'ai'};
+  stored.room.game.hp={player:2,ai:5};stored.room.game.turn='player';stored.room.game.ammo=[];
+  stored.room.game.pendingReload={beforeLighting:stored.room.game.lighting,pendingTurn:'player'};
   stored.room.deadline=f.now()+TURN_MS;
   const opened=await f.service.request(f.code,f.players[0].token,'state');
   assert.equal(opened.game.phase,'compensation');assert.equal(opened.game.compensation.chooser,'player');
+  assert.equal(opened.game.turn,'player','弱势方本来拥有下一行动权时仍应触发补偿');
   assert.equal(opened.room.deadline,f.now()+COMPENSATION_MS);
   const other=await f.service.request(f.code,f.players[1].token,'state');
   assert.deepEqual(other.game.compensation.offers,opened.game.compensation.offers);

@@ -5,6 +5,8 @@ import {createBattleRenderer} from './renderer.js';
 import {stepTankControls} from './controls.js';
 import {WORLD_WIDTH,WORLD_HEIGHT,GRAVITY,WEAPONS,WEAPON_IDS,createMatch,seededRandom,terrainHeightAt,setAim,moveTank,selectWeapon,createProjectile,stepProjectile,splitHiveProjectile,resolveExplosion,fireWeapon,finishTurn,chooseAiAction,isWeaponAvailable,consumeEvents,stepSupplyDrops,hasFallingSupply,settleSupplies} from './engine.js';
 import {audio} from './audio.js';
+import {mapAimPointer} from './aim-control.js';
+import {createFineAimControls} from './aim-fine-controls.js';
 
 const VIEW_WIDTH=1280,VIEW_HEIGHT=720,WORLD_ZOOM=.88,WORLD_VIEW_WIDTH=VIEW_WIDTH/WORLD_ZOOM;
 const canvas=document.querySelector('#game'),ctx=canvas.getContext('2d',{alpha:false,desynchronized:true});
@@ -132,9 +134,9 @@ menu.addEventListener('click',event=>{
 });
 function updateAimFromPointer(event){
   if(!canControlPlayer())return;
-  const rect=aimControl.getBoundingClientRect(),limit=rect.width*.36,rawX=event.clientX-(rect.left+rect.width/2),rawY=event.clientY-(rect.top+rect.height/2),rawDistance=Math.hypot(rawX,rawY),distance=Math.min(limit,rawDistance),scale=rawDistance?distance/rawDistance:0,x=rawX*scale,y=rawY*scale;
-  const heading=rawDistance>2?Math.atan2(y,-x)*180/Math.PI:state.tanks.player.heading;
-  setAim(state,'player',{heading,power:20+distance/limit*80});updateUI();
+  const rect=aimControl.getBoundingClientRect(),limit=rect.width*.4,rawX=event.clientX-(rect.left+rect.width/2),rawY=event.clientY-(rect.top+rect.height/2),tank=state.tanks.player;
+  const mapped=mapAimPointer(rawX,rawY,limit,{heading:tank.heading,power:tank.power,precision:event.shiftKey});
+  setAim(state,'player',mapped);updateUI();
 }
 aimControl.addEventListener('pointerdown',event=>{
   if(!canControlPlayer())return;event.preventDefault();aimControl.setPointerCapture(event.pointerId);aimControl.classList.add('dragging');updateAimFromPointer(event);
@@ -142,6 +144,10 @@ aimControl.addEventListener('pointerdown',event=>{
 aimControl.addEventListener('pointermove',event=>{if(aimControl.hasPointerCapture(event.pointerId))updateAimFromPointer(event);});
 aimControl.addEventListener('pointerup',event=>{if(aimControl.hasPointerCapture(event.pointerId))aimControl.releasePointerCapture(event.pointerId);aimControl.classList.remove('dragging');});
 aimControl.addEventListener('pointercancel',()=>aimControl.classList.remove('dragging'));
+const fineAim=createFineAimControls({container:aimPanel,getValues:()=>{
+  const tank=state.tanks.player;
+  return {heading:Number.isFinite(tank.heading)?tank.heading:tank.direction===1?tank.angle:180-tank.angle,power:tank.power};
+},onChange:values=>{if(!canControlPlayer())return false;setAim(state,'player',values);updateUI();return true;}});
 weaponRack.addEventListener('click',event=>{const card=event.target.closest('.weapon-card');if(card)attemptSelectWeapon(card.dataset.weapon);});
 weaponRack.addEventListener('keydown',event=>{const card=event.target.closest('.weapon-card');if(card&&(event.code==='Enter'||event.code==='Space')){event.preventDefault();event.stopPropagation();attemptSelectWeapon(card.dataset.weapon);}});
 fireButton.addEventListener('click',fireCurrent);
@@ -186,7 +192,8 @@ function spawnExplosion(explosion){
       if(!projectile.alive)continue;projectile.trail.push({x:projectile.x,y:projectile.y});if(projectile.trail.length>18)projectile.trail.shift();
       const impact=stepProjectile(projectile,state,1/120);
       if(impact.type==='split'){const children=splitHiveProjectile(projectile).map(p=>({...p,trail:[]}));projectiles.push(...children);audio.split();showCallout('蜂巢母弹 · 五弹分裂',650);}
-      else if(impact.type==='drill'){audio.drill();shake=Math.max(shake,5);}
+      else if(impact.type==='bounce'){audio.bounce();showCallout(`反弹棱镜弹 · 第 ${impact.bounces} 次反弹`,550);shake=Math.max(shake,3);}
+      else if(impact.type==='drill'){audio.fissure();showCallout('地脉裂变 · 地形正在断裂',650);shake=Math.max(shake,8);}
       else if(impact.type==='terrain'||impact.type==='tank'){spawnExplosion(resolveExplosion(state,projectile));settleSupplies(state);processEngineEvents();}
       else if(impact.type==='out')showCallout('炮弹飞出了战区',700);
     }
@@ -251,6 +258,7 @@ function updateUI(){
   ui.round.textContent=`回合 ${String(state.round).padStart(2,'0')}`;ui.turn.textContent=mode==='intro'?'战场侦察':state.phase==='ended'?'战斗结束':state.turn==='player'?'你的回合':'敌方回合';
   const playerHeading=Number.isFinite(player.heading)?player.heading:(player.direction===1?player.angle:180-player.angle);
   ui.angle.textContent=`${Math.round(playerHeading)%360}°`;ui.power.textContent=Math.round(player.power);
+  fineAim.update({heading:playerHeading,power:player.power});
   ui.fuel.textContent=Math.ceil(player.fuel);ui.fuelBar.style.width=`${player.fuel/player.maxFuel*100}%`;
   document.querySelectorAll('[data-ammo]').forEach(label=>label.textContent=`×${player.ammo[label.dataset.ammo]??0}`);
   document.querySelectorAll('.weapon-card').forEach(card=>{const id=card.dataset.weapon,weapon=WEAPONS[id],locked=weapon.tier<4&&!player.unlockedTiers.includes(weapon.tier)||(weapon.tier===4&&state.round<3),empty=!locked&&id!=='calibration'&&(player.ammo[id]??0)<=0;card.classList.toggle('active',player.weapon===id);card.classList.toggle('locked',locked);card.classList.toggle('empty',empty);card.setAttribute('aria-disabled',String(!canControlPlayer()||locked||empty));card.setAttribute('aria-pressed',String(player.weapon===id));});
@@ -263,7 +271,7 @@ function updateUI(){
 }
 
 const renderer=createBattleRenderer(ctx);
-const {drawSky,drawTerrain,drawTank,drawSupplies,drawAimDots,drawProjectiles,drawEffects,drawVignette,roundedRect,polygon}=renderer;
+const {drawSky,drawTerrain,drawTank,drawSupplies,drawFireZones,drawAimDots,drawProjectiles,drawEffects,drawVignette,roundedRect,polygon}=renderer;
 function drawWorldLocator(){
   if(mode!=='playing')return;const x=472,y=98,w=336,h=13;
   ctx.fillStyle='#061b28b8';roundedRect(x,y,w,h,7);ctx.fill();ctx.strokeStyle='#d8e7d22e';ctx.lineWidth=1;ctx.stroke();
@@ -274,7 +282,7 @@ function drawWorldLocator(){
 function render(){
   renderer.setFrame({state,cameraX,projectiles,particles,shockwaves,damageLabels});
   ctx.setTransform(renderScale,0,0,renderScale,0,0);ctx.clearRect(0,0,VIEW_WIDTH,VIEW_HEIGHT);drawSky();
-  ctx.save();const zoom=mode==='intro'?WORLD_ZOOM:battleCamera.zoom;ctx.scale(zoom,zoom);ctx.translate(0,-(mode==='intro'?WORLD_HEIGHT-VIEW_HEIGHT/WORLD_ZOOM:battleCamera.y));ctx.translate(-cameraX+(shake?(rng()-.5)*shake:0),shake?(rng()-.5)*shake*.55:0);drawTerrain();drawSupplies();
+  ctx.save();const zoom=mode==='intro'?WORLD_ZOOM:battleCamera.zoom;ctx.scale(zoom,zoom);ctx.translate(0,-(mode==='intro'?WORLD_HEIGHT-VIEW_HEIGHT/WORLD_ZOOM:battleCamera.y));ctx.translate(-cameraX+(shake?(rng()-.5)*shake:0),shake?(rng()-.5)*shake*.55:0);drawTerrain();drawFireZones();drawSupplies();
   if(state.phase==='aim'&&!hasFallingSupply(state))drawAimDots(state.tanks[state.turn]);drawTank(state.tanks.player,true);drawTank(state.tanks.enemy,false);drawProjectiles();drawEffects();ctx.restore();
   drawVignette();drawWorldLocator();
 }

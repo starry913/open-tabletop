@@ -8,7 +8,7 @@ export function createTutorial({online=false,onOpen=()=>{},onClose=()=>{}}={}){
       <article><b>02 · 拉圆盘</b><h3>向后拉，往反方向打</h3><p>拖动左下瞄准盘：<strong>往左下拉 ↙，炮弹往右上飞 ↗</strong>。拉得越远，力度越大。</p><small>也可用 W / S 调方向，Q / E 调力度。</small></article>
       <article><b>03 · 选弹开火</b><h3>点“开火”或按空格</h3><p>底部点选炮弹，也可按 1–7 切换。<strong>松开瞄准盘不会发射</strong>；确认后再开火，随后轮到下一辆坦克。</p></article>
     </div>
-    <div class="steel-tutorial-tips"><p><b>打不准？</b>对照上一发留下的轨迹圆点微调。打短了加力度，打远了减力度；山坡挡住就抬高弹道。</p><p><b>捡补给</b>每 3 次行动会有空投，落地后靠近自动拾取：恢复 30 生命，或获得一发稀有炮弹。</p><p><b>解锁弹药</b>开局用无限校准弹；第 3 轮开二档、第 5 轮开三档。四档靠补给获得，第 3 轮起可用。</p></div>
+    <div class="steel-tutorial-tips"><p><b>炮弹图鉴</b></p><p><strong>1 · 校准弹</strong>：无限弹药，轨迹稳定，适合试射和修正角度。</p><p><strong>2 · 反弹棱镜弹</strong>：碰到地形后最多反弹两次，再寻找角度命中掩体后的敌人。</p><p><strong>3 · 黏着燃烧弹</strong>：命中后灼烧目标两回合；坦克着火时会显示持续火焰。</p><p><strong>4 · 地脉裂变弹</strong>：爆炸范围和削地形能力强，适合切断高地、破坏敌人脚下的平台。</p><p><strong>5 · 蜂巢母弹</strong>：飞到最高点后分裂成 5 枚子弹，覆盖一整片区域。</p><p><strong>6 · 核爆弹</strong>：四档终极爆发，伤害、范围和地形破坏最高，但爆炸范围也可能波及自己。</p><p><strong>7 · 引力坍缩弹</strong>：命中后制造引力核心，把附近敌人拉向中心再爆炸；它不会自动追踪，仍需要瞄准。</p><p><b>解锁与补给</b>第 1～2 回合只有校准弹；第 3～4 回合开放两种二档弹；第 5 回合开放两种三档弹。补给有 50% 概率恢复 30 生命，50% 概率随机给一发核爆弹或引力坍缩弹；生命已满时，治疗补给会自动转换为一发四档炮弹，不会空拿。</p></div>
     <footer><p>${online?'好友房不会暂停，回合倒计时继续。':'查看教程时，单人战斗暂停。'}<br>按 Esc 或点击右侧按钮关闭。</p><button type="button" autofocus>知道了，返回游戏</button></footer>`;
   document.body.append(dialog);
   let previousFocus=null;
