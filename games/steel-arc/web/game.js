@@ -144,7 +144,10 @@ aimControl.addEventListener('pointerdown',event=>{
 aimControl.addEventListener('pointermove',event=>{if(aimControl.hasPointerCapture(event.pointerId))updateAimFromPointer(event);});
 aimControl.addEventListener('pointerup',event=>{if(aimControl.hasPointerCapture(event.pointerId))aimControl.releasePointerCapture(event.pointerId);aimControl.classList.remove('dragging');});
 aimControl.addEventListener('pointercancel',()=>aimControl.classList.remove('dragging'));
-const fineAim=createFineAimControls({container:aimPanel,getValues:()=>({heading:state.tanks.player.heading,power:state.tanks.player.power}),onChange:values=>{if(!canControlPlayer())return false;setAim(state,'player',values);updateUI();return true;}});
+const fineAim=createFineAimControls({container:aimPanel,getValues:()=>{
+  const tank=state.tanks.player;
+  return {heading:Number.isFinite(tank.heading)?tank.heading:tank.direction===1?tank.angle:180-tank.angle,power:tank.power};
+},onChange:values=>{if(!canControlPlayer())return false;setAim(state,'player',values);updateUI();return true;}});
 weaponRack.addEventListener('click',event=>{const card=event.target.closest('.weapon-card');if(card)attemptSelectWeapon(card.dataset.weapon);});
 weaponRack.addEventListener('keydown',event=>{const card=event.target.closest('.weapon-card');if(card&&(event.code==='Enter'||event.code==='Space')){event.preventDefault();event.stopPropagation();attemptSelectWeapon(card.dataset.weapon);}});
 fireButton.addEventListener('click',fireCurrent);

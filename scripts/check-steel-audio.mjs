@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {mkdtemp,mkdir} from 'node:fs/promises';
 import {createTabletopServer} from '../server/index.mjs';
+import {BACKGROUND_TRACK,WEAPON_AUDIO} from '../games/steel-arc/web/audio-assets.js';
 const require=createRequire(process.env.PLAYWRIGHT_MODULE_PATH||import.meta.url);
 const {chromium}=require('playwright');
 await mkdir('_qa/steel-audio',{recursive:true});
@@ -31,7 +32,8 @@ try{
     }
     await context.close();return result;
   });
-  assert.equal(decoded.length,8);assert.equal(new Set(decoded.map(item=>item.file)).size,8);
+  assert.equal(decoded.length,1+Object.keys(WEAPON_AUDIO).length);
+  assert.deepEqual(new Set(decoded.map(item=>item.file)),new Set([BACKGROUND_TRACK,...Object.values(WEAPON_AUDIO).map(spec=>spec.file)]));
   for(const item of decoded)assert.ok(item.duration>0&&item.channels>0);
   await page.waitForFunction(()=>window.musicElements[0]?.currentTime>0&&!window.musicElements[0].paused);
   await page.evaluate(async()=>{

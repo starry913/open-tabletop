@@ -12,6 +12,19 @@ const {server}=app;
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const base=`http://127.0.0.1:${server.address().port}`;
 let browser;
+async function checkFineAim(page,fireSelector){
+  const angle=Number((await page.locator('#angle-value').textContent()).replace('°',''));
+  const plus=page.getByRole('button',{name:'角度加一',exact:true});
+  await plus.click();await plus.focus();await page.keyboard.press('Space');
+  assert.equal(Number((await page.locator('#angle-value').textContent()).replace('°','')),(angle+2)%360,'Space activates the focused aim button without firing');
+  assert.equal(await page.locator(fireSelector).isEnabled(),true);
+  const power=Number(await page.locator('#power-value').textContent());
+  await page.getByRole('button',{name:'力度加一',exact:true}).focus();await page.keyboard.press('Enter');
+  assert.equal(Number(await page.locator('#power-value').textContent()),Math.min(100,power+1));
+  // Preserve the existing shot fixtures and camera checks after exercising the new controls.
+  await page.getByRole('button',{name:'角度减一',exact:true}).click();await page.getByRole('button',{name:'角度减一',exact:true}).click();
+  await page.getByRole('button',{name:'力度减一',exact:true}).click();
+}
 try{
   browser=await chromium.launch({channel:process.env.PLAYWRIGHT_CHANNEL||'msedge',headless:true});
   const contextA=await browser.newContext({viewport:{width:1440,height:960}}),contextB=await browser.newContext();
@@ -74,6 +87,7 @@ try{
   }
   await a.setViewportSize({width:1440,height:960});
   await a.waitForFunction(()=>!document.querySelector('#fire').disabled);
+  await checkFineAim(a,'#fire');
   await a.locator('#battle-tutorial').click();
   const sharedTutorial=await a.locator('.steel-tutorial-grid').textContent();
   assert.match(await a.locator('.steel-tutorial').textContent(),/好友房不会暂停/);
@@ -87,7 +101,10 @@ try{
   assert.equal(await a.locator('#fuel-value').textContent(),tutorialFuel);
   assert.equal(tutorialActions,0,'tutorial hotkeys must not send battle actions');a.off('request',trackTutorial);
   await a.setViewportSize({width:844,height:390});
-  assert.ok(await a.locator('.steel-tutorial').evaluate(el=>el.scrollHeight<=el.clientHeight+1),'landscape tutorial should fit without scrolling');
+  assert.ok(await a.locator('.steel-tutorial').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'expanded manual must not overflow horizontally');
+  await a.locator('.steel-tutorial button').scrollIntoViewIfNeeded();
+  const closeBox=await a.locator('.steel-tutorial button').boundingBox();
+  assert.ok(closeBox&&closeBox.y>=0&&closeBox.y+closeBox.height<=390,'the scrollable landscape manual keeps its close button reachable');
   await a.screenshot({path:'_qa/steel-friends/tutorial-online.png'});
   await a.keyboard.press('Escape');assert.equal(await a.locator('.steel-tutorial').isVisible(),false);
   await a.setViewportSize({width:1440,height:960});
@@ -128,6 +145,7 @@ try{
   await a.setViewportSize({width:1440,height:960});
   await a.goto(base+'/games/steel-arc/index.html');await a.locator('#ai-difficulty').selectOption('hard');await a.reload();assert.equal(await a.locator('#ai-difficulty').inputValue(),'hard');await a.screenshot({path:'_qa/steel-friends/solo-difficulty.png'});await a.locator('[data-action="start"]').click();
   await a.waitForFunction(()=>!document.querySelector('#fire-button').disabled);
+  await checkFineAim(a,'#fire-button');
   await a.locator('#battle-tutorial').click();
   assert.equal(await a.locator('.steel-tutorial-grid').textContent(),sharedTutorial);
   assert.match(await a.locator('.steel-tutorial').textContent(),/单人战斗暂停/);
