@@ -165,6 +165,6 @@ Bug fixes, interaction improvements, and complete playable games are welcome. St
 
 Original project code is licensed under the [MIT License](LICENSE). Third-party names, marks, and other assets remain subject to the rights and licenses described in [third-party notices](THIRD_PARTY_NOTICES.md).
 
-## Campus Festival (development version)
+## Campus Festival Chronicles
 
 `/games/anime-campus/index.html` adds a 60-space crossover adventure, 51 fixed-map events, six characters and six items. Play solo with rule-based AI, with 2–4 people sharing a screen, or in a Node friend room at `/games/anime-campus/online.html`. Public releases are published separately from local development. Official portrait files are an optional Git-ignored asset pack; see [game documentation](games/anime-campus/README.md).
