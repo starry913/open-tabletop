@@ -10,6 +10,8 @@ export const SUPPLY_REACH_TURNS = 2;
 export const FUEL_COST_PER_UNIT = .34;
 export const SUPPLY_PICKUP_RADIUS = 44;
 export const HIVE_DAMAGE_CAP = 96;
+export const FIRE_ZONE_RADIUS = 72;
+export const FIRE_DAMAGE = 8;
 export const HOMING_LAUNCH_TIME = .18;
 export const HOMING_SPEED = 680;
 export const AI_LEVELS=Object.freeze({
@@ -21,12 +23,12 @@ export const normalizeDifficulty=value=>Object.hasOwn(AI_LEVELS,value)?value:'no
 
 export const WEAPONS = Object.freeze({
   calibration: Object.freeze({id:'calibration',key:1,tier:1,name:'校准弹',short:'校准',role:'稳定试射',damage:24,blast:40,crater:32,speed:1.05,ammo:Infinity,color:'#ffd35a'}),
-  armorPiercing: Object.freeze({id:'armorPiercing',key:2,tier:2,name:'穿甲弹',short:'穿甲',role:'精确重击',damage:40,blast:58,crater:34,speed:1.12,ammo:2,color:'#ff7859'}),
-  quake: Object.freeze({id:'quake',key:3,tier:2,name:'震地弹',short:'震地',role:'宽域破土',damage:44,blast:72,crater:82,craterDepth:36,speed:.92,ammo:2,color:'#f2a457'}),
-  drill: Object.freeze({id:'drill',key:4,tier:3,name:'破障钻弹',short:'钻地',role:'深层爆破',damage:62,blast:88,crater:104,craterDepth:72,speed:.9,ammo:2,color:'#d75cff'}),
+  armorPiercing: Object.freeze({id:'armorPiercing',key:2,tier:2,name:'反弹棱镜弹',short:'棱镜',role:'碰壁反弹两次',damage:42,blast:60,crater:34,speed:1.08,ammo:2,color:'#ff7859'}),
+  quake: Object.freeze({id:'quake',key:3,tier:2,name:'黏着燃烧弹',short:'燃烧',role:'黏着并持续灼烧',damage:34,blast:62,crater:48,craterDepth:28,speed:.96,ammo:2,color:'#f2a457'}),
+  drill: Object.freeze({id:'drill',key:4,tier:3,name:'地脉裂变弹',short:'裂变',role:'沿地面扩散裂缝',damage:64,blast:94,crater:118,craterDepth:78,speed:.9,ammo:2,color:'#d75cff'}),
   hive: Object.freeze({id:'hive',key:5,tier:3,name:'蜂巢母弹',short:'分裂',role:'五弹覆盖',damage:58,blast:92,crater:38,speed:.98,ammo:2,color:'#8ef779'}),
   meteor: Object.freeze({id:'meteor',key:6,tier:4,name:'核爆弹',short:'核爆',role:'超广域毁灭',damage:115,blast:190,crater:170,craterDepth:115,speed:.86,ammo:0,color:'#ff4b32'}),
-  pulse: Object.freeze({id:'pulse',key:7,tier:4,name:'追踪弹',short:'追踪',role:'锁定必中',damage:78,blast:120,crater:62,craterDepth:42,speed:1.08,ammo:0,color:'#66eaff'}),
+  pulse: Object.freeze({id:'pulse',key:7,tier:4,name:'引力坍缩弹',short:'引力',role:'吸附敌人与炮弹后爆炸',damage:82,blast:126,crater:70,craterDepth:48,speed:.92,ammo:0,color:'#66eaff'}),
 });
 export const WEAPON_IDS=Object.freeze(Object.keys(WEAPONS));
 
@@ -39,7 +41,7 @@ const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const smoothstep=value=>value*value*(3-2*value);
 const finiteAmmo=id=>Number.isFinite(WEAPONS[id].ammo);
 function stateRandom(state){state.rngState=(Math.imul(state.rngState,1664525)+1013904223)>>>0;return state.rngState/4294967296;}
-function pushEvent(state,event){state.events.push(event);return event;}
+function pushEvent(state,event){state.events??=[];state.events.push(event);if(state.events.length>48)state.events.splice(0,state.events.length-48);return event;}
 export function consumeEvents(state){return state.events.splice(0);}
 
 export function generateTerrain({width=WORLD_WIDTH,height=WORLD_HEIGHT,step=TERRAIN_STEP}={},rng=Math.random){
@@ -64,9 +66,9 @@ export function createMatch({seed=Date.now(),difficulty='normal'}={}){
   const rng=seededRandom(seed),terrain=generateTerrain({},rng);
   const makeTank=(id,x,direction)=>settleTank({
     id,difficulty:normalizeDifficulty(difficulty),x,y:0,direction,slope:0,hp:100,maxHp:100,angle:45,power:68,fuel:BASE_FUEL,maxFuel:BASE_FUEL,weapon:'calibration',unlockedTiers:[1],
-    ammo:{armorPiercing:0,quake:0,drill:0,hive:0,meteor:0,pulse:0},status:{pulseTurns:0},shots:0,hits:0,damageDone:0,
+    ammo:{armorPiercing:0,quake:0,drill:0,hive:0,meteor:0,pulse:0},status:{pulseTurns:0,burnTurns:0,burnDamage:0},shots:0,hits:0,damageDone:0,
   },terrain);
-  return {schema:2,seed,rngState:(Number(seed)^0x73a4c19d)>>>0,terrain,turn:'player',phase:'aim',round:1,completedTurns:0,nextSupplyAt:SUPPLY_INTERVAL,winner:null,supplies:[],nextSupplyId:1,events:[],volleySerial:0,volleyDamage:{},tanks:{player:makeTank('player',WORLD_WIDTH*.18,1),enemy:makeTank('enemy',WORLD_WIDTH*.82,-1)}};
+  return {schema:2,seed,rngState:(Number(seed)^0x73a4c19d)>>>0,terrain,turn:'player',phase:'aim',round:1,completedTurns:0,nextSupplyAt:SUPPLY_INTERVAL,winner:null,supplies:[],fireZones:[],nextSupplyId:1,events:[],volleySerial:0,volleyDamage:{},tanks:{player:makeTank('player',WORLD_WIDTH*.18,1),enemy:makeTank('enemy',WORLD_WIDTH*.82,-1)}};
 }
 
 export function isWeaponAvailable(tank,weaponId,round=Infinity){
@@ -93,8 +95,13 @@ export function collectSupplies(state,tankId){
   const tank=state.tanks[tankId];if(!tank)return [];const collected=[];
   for(const supply of state.supplies){
     if(!supply.landed||supply.destroyed||supply.collected||Math.hypot(tank.x-supply.x,(tank.y-10)-supply.y)>SUPPLY_PICKUP_RADIUS)continue;supply.collected=true;
-    if(supply.reward==='health'){const restored=Math.min(30,tank.maxHp-tank.hp);tank.hp+=restored;collected.push(pushEvent(state,{type:'pickup',tankId,reward:'health',amount:restored,supplyId:supply.id}));}
-    else{tank.ammo[supply.weaponId]=(tank.ammo[supply.weaponId]??0)+1;collected.push(pushEvent(state,{type:'pickup',tankId,reward:'ammo',weaponId:supply.weaponId,amount:1,supplyId:supply.id}));}
+    if(supply.reward==='health'){
+      const restored=Math.min(30,tank.maxHp-tank.hp);
+      if(restored>0){tank.hp+=restored;collected.push(pushEvent(state,{type:'pickup',tankId,reward:'health',amount:restored,supplyId:supply.id}));}
+      else {const weaponId=stateRandom(state)<.5?'meteor':'pulse';tank.ammo[weaponId]=(tank.ammo[weaponId]??0)+1;collected.push(pushEvent(state,{type:'pickup',tankId,reward:'ammo',weaponId,amount:1,supplyId:supply.id,converted:true}));}
+    } else {
+      const weaponId=WEAPONS[supply.weaponId]?supply.weaponId:(stateRandom(state)<.5?'meteor':'pulse');tank.ammo[weaponId]=(tank.ammo[weaponId]??0)+1;collected.push(pushEvent(state,{type:'pickup',tankId,reward:'ammo',weaponId,amount:1,supplyId:supply.id}));
+    }
   }
   state.supplies=state.supplies.filter(item=>!item.collected&&!item.destroyed);return collected;
 }
@@ -103,7 +110,9 @@ export function moveTank(state,tankId,distance){
   const tank=state.tanks[tankId];if(!tank||state.phase!=='aim'||state.turn!==tankId||!Number.isFinite(distance)||distance===0)return 0;
   const requested=Math.abs(distance),allowed=Math.min(requested,tank.fuel/FUEL_COST_PER_UNIT),signed=Math.sign(distance)*allowed,nextX=clamp(tank.x+signed,46,state.terrain.width-46),currentY=terrainHeightAt(state.terrain,tank.x),nextY=terrainHeightAt(state.terrain,nextX);
   if(Math.abs(nextY-currentY)>Math.max(12,Math.abs(nextX-tank.x)*.8))return 0;
-  const moved=Math.abs(nextX-tank.x);tank.x=nextX;tank.fuel=Math.max(0,tank.fuel-moved*FUEL_COST_PER_UNIT);settleTank(tank,state.terrain);collectSupplies(state,tankId);return moved*Math.sign(signed);
+  const moved=Math.abs(nextX-tank.x);tank.x=nextX;tank.fuel=Math.max(0,tank.fuel-moved*FUEL_COST_PER_UNIT);settleTank(tank,state.terrain);collectSupplies(state,tankId);
+  if((state.fireZones||[]).some(zone=>Math.hypot(tank.x-zone.x,(tank.y-8)-zone.y)<zone.radius))tank.status.burnTurns=Math.max(tank.status.burnTurns||0,2),tank.status.burnDamage=FIRE_DAMAGE;
+  return moved*Math.sign(signed);
 }
 
 export function barrelTip(tank,angle=tank.angle,heading=tank.heading){
@@ -121,8 +130,7 @@ function homingTarget(state,ownerId,preferredId){
 export function createProjectile(state,tankId,{angle,power,weaponId,angleOffset=0}={}){
   const tank=state.tanks[tankId],weapon=WEAPONS[weaponId||tank.weapon];if(!tank||!weapon)throw Error('Invalid projectile');
   const freeHeading=angle==null&&Number.isFinite(tank.heading),shotAngle=clamp(angle??tank.angle,10,85),heading=freeHeading?tank.heading+angleOffset:(tank.direction===1?shotAngle+angleOffset:180-shotAngle-angleOffset),shotPower=clamp(power??tank.power,20,100),tip=barrelTip(tank,shotAngle,heading),speed=(300+shotPower*5)*weapon.speed,radians=heading*Math.PI/180;
-  const target=weapon.id==='pulse'?homingTarget(state,tankId):null;
-  return {x:tip.x,y:tip.y,previousX:tip.x,previousY:tip.y,vx:Math.cos(radians)*speed,vy:-Math.sin(radians)*speed,age:0,owner:tankId,weaponId:weapon.id,alive:true,mode:'flight',falling:false,volleyId:state.volleySerial,targetId:target?.id??null,homing:Boolean(target)};
+  return {x:tip.x,y:tip.y,previousX:tip.x,previousY:tip.y,vx:Math.cos(radians)*speed,vy:-Math.sin(radians)*speed,age:0,owner:tankId,weaponId:weapon.id,alive:true,mode:'flight',falling:false,volleyId:state.volleySerial,bounces:0};
 }
 
 export function splitHiveProjectile(projectile){
@@ -141,21 +149,6 @@ function advanceProjectile(projectile,state,dt){
     projectile.drillElapsed+=dt;const progress=Math.min(1,projectile.drillElapsed/.18);projectile.x=projectile.drillStartX+projectile.drillDX*36*progress;projectile.y=projectile.drillStartY+projectile.drillDY*36*progress;
     if(progress>=1){projectile.alive=false;return {type:'terrain',x:projectile.x,y:projectile.y,drilled:true};}return {type:'none'};
   }
-  if(projectile.weaponId==='pulse'&&projectile.homing){
-    const target=homingTarget(state,projectile.owner,projectile.targetId);
-    if(!target){projectile.alive=false;return {type:'out',x:projectile.x,y:projectile.y};}
-    projectile.targetId=target.id;projectile.age+=dt;
-    if(projectile.age>HOMING_LAUNCH_TIME){
-      const targetX=target.x,targetY=target.y-10,dx=targetX-projectile.x,dy=targetY-projectile.y,distance=Math.hypot(dx,dy),travel=HOMING_SPEED*dt;
-      if(distance<=Math.max(25,travel)){
-        projectile.x=targetX;projectile.y=targetY;projectile.alive=false;
-        return {type:'tank',x:targetX,y:targetY,tankId:target.id};
-      }
-      projectile.vx=dx/distance*HOMING_SPEED;projectile.vy=dy/distance*HOMING_SPEED;
-    }
-    projectile.x+=projectile.vx*dt;projectile.y+=projectile.vy*dt;
-    return {type:'none'};
-  }
   const oldVy=projectile.vy;if(projectile.weaponId==='meteor'&&oldVy>=0)projectile.falling=true;
   const gravity=projectile.weaponId==='meteor'&&projectile.falling?GRAVITY*1.9:GRAVITY;
   projectile.vy+=gravity*dt;projectile.x+=projectile.vx*dt;projectile.y+=projectile.vy*dt;projectile.age+=dt;
@@ -170,9 +163,7 @@ function advanceProjectile(projectile,state,dt){
     }
     if(x>=0&&x<=WORLD_WIDTH&&y>=terrainHeightAt(state.terrain,x)){
       projectile.x=x;projectile.y=y;
-      if(projectile.weaponId==='drill'){
-        const magnitude=Math.max(1,Math.hypot(projectile.vx,projectile.vy));projectile.mode='drilling';projectile.drillElapsed=0;projectile.drillStartX=x;projectile.drillStartY=y;projectile.drillDX=projectile.vx/magnitude;projectile.drillDY=Math.max(.35,projectile.vy/magnitude);return {type:'drill',x,y};
-      }
+      if(projectile.weaponId==='armorPiercing'&&projectile.bounces<2){projectile.bounces++;projectile.x=x;projectile.y=y-2;projectile.vx*=-.72;projectile.vy=-Math.abs(projectile.vy)*.72;return {type:'bounce',x,y,bounces:projectile.bounces};}
       projectile.alive=false;return {type:'terrain',x,y};
     }
   }
@@ -192,9 +183,11 @@ export function resolveExplosion(state,projectile){
     let amount=calculateExplosionDamage(tank,explosion);
     if(projectile.weaponId==='hive'){const key=`${projectile.volleyId}:${tank.id}`,used=state.volleyDamage[key]??0;amount=Math.min(amount,Math.max(0,HIVE_DAMAGE_CAP-used));state.volleyDamage[key]=used+amount;}
     damages[tank.id]=amount;tank.hp=Math.max(0,tank.hp-amount);
-    if(amount>0&&tank.id!==projectile.owner){const owner=state.tanks[projectile.owner];owner.hits++;owner.damageDone+=amount;if(projectile.weaponId==='pulse')tank.status.pulseTurns=1;}
+    if(amount>0&&tank.id!==projectile.owner){const owner=state.tanks[projectile.owner];owner.hits++;owner.damageDone+=amount;if(projectile.weaponId==='quake'){tank.status.burnTurns=2;tank.status.burnDamage=8;}}
   }
+  if(projectile.weaponId==='pulse')for(const tank of Object.values(state.tanks)){if(tank.id===projectile.owner||tank.hp<=0)continue;const dx=explosion.x-tank.x,dy=explosion.y-(tank.y-10),distance=Math.hypot(dx,dy);if(distance<explosion.radius*1.45&&distance>1){const pull=Math.min(42,(explosion.radius*1.45-distance)*.34);tank.x=clamp(tank.x+dx/distance*pull,46,state.terrain.width-46);settleTank(tank,state.terrain);}}
   deformTerrain(state.terrain,{x:explosion.x,y:explosion.y,radius:weapon.crater,depth:weapon.craterDepth??weapon.crater});for(const tank of Object.values(state.tanks))settleTank(tank,state.terrain);
+  if(projectile.weaponId==='quake'){state.fireZones??=[];state.fireZones.push({id:`${state.volleySerial}:${state.completedTurns}`,x:explosion.x,y:terrainHeightAt(state.terrain,explosion.x)-3,radius:FIRE_ZONE_RADIUS,expiresAt:state.completedTurns+(state.turnOrder?.length||2)*2,owner:projectile.owner});state.fireZones=state.fireZones.slice(-6);}
   for(const supply of state.supplies)if(!supply.destroyed&&!supply.collected&&Math.hypot(supply.x-explosion.x,supply.y-explosion.y)<weapon.blast+18){supply.destroyed=true;pushEvent(state,{type:'supplyDestroyed',supplyId:supply.id,x:supply.x,y:supply.y});}
   state.supplies=state.supplies.filter(item=>!item.destroyed&&!item.collected);return {...explosion,damages,weaponId:weapon.id};
 }
@@ -268,9 +261,9 @@ export function settleSupplies(state){for(const supply of state.supplies)if(supp
 export function finishTurn(state){
   finishTrajectory(state);
   const playerDead=state.tanks.player.hp<=0,enemyDead=state.tanks.enemy.hp<=0;if(playerDead||enemyDead){state.phase='ended';state.winner=playerDead&&enemyDead?'draw':playerDead?'enemy':'player';return state.winner;}
-  state.completedTurns++;if(state.completedTurns>=state.nextSupplyAt){dropSupply(state);state.nextSupplyAt+=SUPPLY_INTERVAL;}
+  state.completedTurns++;state.fireZones=(state.fireZones||[]).filter(zone=>zone.expiresAt>state.completedTurns);if(state.completedTurns>=state.nextSupplyAt){dropSupply(state);state.nextSupplyAt+=SUPPLY_INTERVAL;}
   state.turn=state.turn==='player'?'enemy':'player';state.phase='aim';if(state.turn==='player'){state.round++;unlockWeaponsForRound(state,state.round);}
-  const active=state.tanks[state.turn],interfered=active.status.pulseTurns>0;active.fuel=interfered?PULSE_FUEL:active.maxFuel;if(interfered)active.status.pulseTurns--;if(!isWeaponAvailable(active,active.weapon,state.round))active.weapon='calibration';return null;
+  const active=state.tanks[state.turn];if((state.fireZones||[]).some(zone=>Math.hypot(active.x-zone.x,(active.y-8)-zone.y)<zone.radius)){active.status.burnTurns=Math.max(active.status.burnTurns||0,2);active.status.burnDamage=FIRE_DAMAGE;}if(active.status.burnTurns>0){const burn=Math.min(active.hp,active.status.burnDamage||FIRE_DAMAGE);active.hp-=burn;active.status.burnTurns--;if(!active.status.burnTurns)active.status.burnDamage=0;}if(active.hp<=0){state.phase='ended';state.winner=state.turn==='player'?'enemy':'player';return state.winner;}active.fuel=active.maxFuel;if(!isWeaponAvailable(active,active.weapon,state.round))active.weapon='calibration';return null;
 }
 
 export function validMatch(state){return Boolean(state&&state.schema===2&&state.terrain?.points?.length>100&&Array.isArray(state.supplies)&&Number.isInteger(state.completedTurns)&&['player','enemy'].includes(state.turn)&&['aim','flight','ended'].includes(state.phase)&&Object.values(state.tanks||{}).every(t=>Number.isFinite(t.x)&&Number.isFinite(t.hp)&&t.hp>=0&&t.hp<=100&&t.angle>=10&&t.angle<=85&&(!Number.isFinite(t.heading)||(t.heading>=0&&t.heading<360))&&t.power>=20&&t.power<=100&&t.maxFuel===BASE_FUEL&&Array.isArray(t.unlockedTiers)));}
@@ -286,7 +279,7 @@ function createTank(id,team,x,direction,terrain,name=id,ai=false){
     heading:direction===1?45:135,power:68,fuel:BASE_FUEL,maxFuel:BASE_FUEL,
     weapon:'calibration',unlockedTiers:[1],
     ammo:{armorPiercing:0,quake:0,drill:0,hive:0,meteor:0,pulse:0},
-    status:{pulseTurns:0},shots:0,hits:0,damageDone:0,
+    status:{pulseTurns:0,burnTurns:0,burnDamage:0},shots:0,hits:0,damageDone:0,
   },terrain);
 }
 
@@ -305,7 +298,7 @@ export function createTeamMatch({seed=Date.now(),roster={}}={}){
   return {schema:3,mode:'teams',seed,rngState:(Number(seed)^0x73a4c19d)>>>0,terrain,
     turn:turnOrder[0],turnIndex:0,turnOrder,order:[...turnOrder],phase:'aim',round:1,
     completedTurns:0,nextSupplyAt:SUPPLY_INTERVAL,winner:null,supplies:[],nextSupplyId:1,
-    events:[],volleySerial:0,volleyDamage:{},lastShot:null,shotHistory:[],tanks};
+    events:[],fireZones:[],volleySerial:0,volleyDamage:{},lastShot:null,shotHistory:[],tanks};
 }
 
 export function livingTeamSlots(state,team){
@@ -318,14 +311,13 @@ export function finishTeamTurn(state){
   if(!aliveA.length||!aliveB.length){
     state.phase='ended';state.winner=!aliveA.length&&!aliveB.length?'draw':aliveA.length?'A':'B';return state.winner;
   }
-  state.completedTurns++;
+  state.completedTurns++;state.fireZones=(state.fireZones||[]).filter(zone=>zone.expiresAt>state.completedTurns);
   if(state.completedTurns>=state.nextSupplyAt){dropSupply(state);state.nextSupplyAt+=SUPPLY_INTERVAL;}
   const previous=state.turnIndex;let next=previous;
   for(let i=0;i<state.turnOrder.length;i++){next=(next+1)%state.turnOrder.length;if(state.tanks[state.turnOrder[next]]?.hp>0)break;}
   state.turnIndex=next;state.turn=state.turnOrder[next];state.phase='aim';
   if(next<=previous){state.round++;unlockWeaponsForRound(state,state.round);}
-  const active=state.tanks[state.turn],interfered=active.status.pulseTurns>0;
-  active.fuel=interfered?PULSE_FUEL:active.maxFuel;if(interfered)active.status.pulseTurns--;
+  let active=state.tanks[state.turn];if((state.fireZones||[]).some(zone=>Math.hypot(active.x-zone.x,(active.y-8)-zone.y)<zone.radius)){active.status.burnTurns=Math.max(active.status.burnTurns||0,2);active.status.burnDamage=FIRE_DAMAGE;}if(active.status.burnTurns>0){active.hp=Math.max(0,active.hp-(active.status.burnDamage||FIRE_DAMAGE));active.status.burnTurns--;if(!active.status.burnTurns)active.status.burnDamage=0;}if(active.hp<=0){const aliveA=livingTeamSlots(state,'A'),aliveB=livingTeamSlots(state,'B');if(!aliveA.length||!aliveB.length){state.phase='ended';state.winner=aliveA.length?'A':aliveB.length?'B':'draw';return state.winner;}for(let i=0;i<state.turnOrder.length;i++){state.turnIndex=(state.turnIndex+1)%state.turnOrder.length;state.turn=state.turnOrder[state.turnIndex];if(state.tanks[state.turn]?.hp>0)break;}active=state.tanks[state.turn];}active.fuel=active.maxFuel;
   if(!isWeaponAvailable(active,active.weapon,state.round))active.weapon='calibration';
   return null;
 }

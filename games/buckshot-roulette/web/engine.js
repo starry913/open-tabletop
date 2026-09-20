@@ -405,7 +405,7 @@ export function settleOnlineBoundary(g){
   for(const side of SIDES)if(g.effects?.fuse?.[side]&&g.effects.fuse[side]<=g.round){g.effects.fuse[side]=null;expiredFuses.push(side);}
   const weak=g.hp.player<g.hp.ai?'player':g.hp.ai<g.hp.player?'ai':null;
   const strong=weak&&opponent(weak);
-  if(weak&&g.hp[strong]-g.hp[weak]>=2&&g.turn===strong){
+  if(weak&&g.hp[strong]-g.hp[weak]>=2){
     g.phase='compensation';
     g.compensation=makeCompensation(g,weak,strong);
     return {kind:'compensation_open',chooser:weak,advantaged:strong,offers:[...g.compensation.offers],rare:g.compensation.rare,expiredFuses};

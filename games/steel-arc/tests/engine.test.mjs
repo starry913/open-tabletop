@@ -104,28 +104,36 @@ test('hive volley damage against one tank is capped at its tier-three limit',()=
   assert.equal(enemy.hp,100-HIVE_DAMAGE_CAP);assert.equal(state.tanks.player.damageDone,HIVE_DAMAGE_CAP);
 });
 
-test('drill enters terrain before exploding and meteor gains extra falling gravity',()=>{
+test('裂变弹命中地形并测试核爆下坠加速',()=>{
   const state=createMatch({seed:16});state.terrain.points.fill(500);for(const tank of Object.values(state.tanks)){tank.y=485;tank.slope=0;}
   const drill=createProjectile(state,'player',{weaponId:'drill',angle:45,power:45});let drilled=false,result;
   for(let i=0;i<1800;i++){result=stepProjectile(drill,state,1/120);if(result.type==='drill')drilled=true;if(['terrain','tank','out'].includes(result.type))break;}
-  assert.equal(drilled,true);assert.equal(result.type,'terrain');assert.ok(result.drilled);
+  assert.equal(drilled,false);assert.equal(result.type,'terrain');
   const meteor=createProjectile(state,'player',{weaponId:'meteor',angle:70,power:45});meteor.vy=10;const before=meteor.vy;stepProjectile(meteor,state,.1);assert.ok(meteor.vy-before>GRAVITY*.18);
 });
 
-test('homing round hit limits only the target next turn fuel to 52.5',()=>{
+test('引力弹不再施加必中或燃料惩罚',()=>{
   const state=createMatch({seed:17}),enemy=state.tanks.enemy;
-  resolveExplosion(state,{x:enemy.x,y:enemy.y-10,owner:'player',weaponId:'pulse',volleyId:1});assert.equal(enemy.status.pulseTurns,1);
-  finishTurn(state);assert.equal(state.turn,'enemy');assert.equal(enemy.fuel,PULSE_FUEL);assert.equal(enemy.status.pulseTurns,0);
+  resolveExplosion(state,{x:enemy.x,y:enemy.y-10,owner:'player',weaponId:'pulse',volleyId:1});assert.equal(enemy.status.pulseTurns,0);
+  finishTurn(state);assert.equal(state.turn,'enemy');assert.equal(enemy.fuel,BASE_FUEL);
   finishTurn(state);finishTurn(state);assert.equal(enemy.fuel,BASE_FUEL);
 });
 
-test('homing round guarantees a hit even when fired backward or into the ground',()=>{
+test('燃烧弹留下火区并在后续回合造成持续伤害',()=>{
+  const state=createMatch({seed:1701}),enemy=state.tanks.enemy;enemy.hp=100;
+  resolveExplosion(state,{x:enemy.x,y:enemy.y-10,owner:'player',weaponId:'quake',volleyId:1});
+  assert.equal(state.fireZones.length,1);assert.equal(enemy.status.burnTurns,2);
+  const afterBlast=enemy.hp;finishTurn(state);assert.equal(enemy.hp,afterBlast-8);assert.equal(enemy.status.burnTurns,1);
+  finishTurn(state);finishTurn(state);assert.ok(enemy.hp<=afterBlast-16);
+});
+
+test('引力弹仍需正常瞄准，不会自动锁定',()=>{
   for(const seed of [17,117,217])for(const heading of [180,270]){
     const state=createMatch({seed});setAim(state,'player',{heading,power:20});
     const projectile=createProjectile(state,'player',{weaponId:'pulse'});let result={type:'none'};
-    assert.equal(projectile.targetId,'enemy');assert.equal(projectile.homing,true);
+    assert.equal(projectile.targetId,undefined);assert.equal(projectile.homing,undefined);
     for(let frame=0;frame<1200&&result.type==='none';frame++)result=stepProjectile(projectile,state,1/120);
-    assert.equal(result.type,'tank',`seed ${seed}, heading ${heading}`);assert.equal(result.tankId,'enemy');
+    assert.ok(['terrain','out','tank'].includes(result.type),`seed ${seed}, heading ${heading}`);
   }
 });
 
@@ -180,6 +188,24 @@ test('landed supply heals at most 30 or grants exactly one tier-four round',()=>
   state.supplies=[{id:2,x:tank.x,y:tank.y-10,landed:true,reward:'ammo',weaponId:'meteor',collected:false,destroyed:false}];collectSupplies(state,'player');assert.equal(tank.ammo.meteor,1);assert.equal(tank.ammo.pulse,0);
 });
 
+test('full-health supply never disappears without a reward',()=>{
+  const state=createMatch({seed:731}),tank=state.tanks.player;
+  state.supplies=[{id:3,x:tank.x,y:tank.y-10,landed:true,reward:'health',collected:false,destroyed:false}];
+  collectSupplies(state,'player');
+  assert.equal(state.supplies.length,0);
+  assert.equal(tank.ammo.meteor+tank.ammo.pulse,1);
+  assert.equal(consumeEvents(state).find(event=>event.type==='pickup').amount,1);
+});
+
+test('late multiplayer pickups always apply health or ammunition',()=>{
+  const state=createTeamMatch({seed:947});state.round=16;state.completedTurns=31;
+  const tank=state.tanks.A1;tank.hp=19;state.turn='A1';state.phase='aim';
+  state.supplies=[{id:90,x:tank.x+3,y:tank.y-10,landed:true,reward:'health',collected:false,destroyed:false}];
+  moveTank(state,'A1',1);assert.equal(tank.hp,49);assert.equal(state.supplies.length,0);
+  state.supplies=[{id:91,x:tank.x+3,y:tank.y-10,landed:true,reward:'ammo',weaponId:'pulse',collected:false,destroyed:false}];
+  moveTank(state,'A1',1);assert.equal(tank.ammo.pulse,1);assert.equal(state.supplies.length,0);
+});
+
 test('falling supplies land on terrain and explosions can destroy them',()=>{
   const state=createMatch({seed:25}),supply=dropSupply(state);stepSupplyDrops(state,1);assert.equal(supply.landed,true);assert.equal(supply.y,terrainHeightAt(state.terrain,supply.x)-13);
   resolveExplosion(state,{x:supply.x,y:supply.y,owner:'player',weaponId:'calibration',volleyId:1});assert.equal(state.supplies.length,0);assert.ok(consumeEvents(state).some(event=>event.type==='supplyDestroyed'));
@@ -197,19 +223,18 @@ test('team match creates four independent tanks in fixed A1 B1 A2 B2 order',()=>
   assert.equal(Object.keys(state.tanks).length,4);assert.equal(state.tanks.A1.team,'A');assert.equal(state.tanks.B2.team,'B');assert.equal(state.tanks.A2.ai,true);
 });
 
-test('team homing round locks the nearest living enemy and still hits from a wrong heading',()=>{
+test('team 引力弹沿真实弹道飞行',()=>{
   const state=createTeamMatch({seed:811});setAim(state,'A1',{heading:270,power:20});
   const projectile=createProjectile(state,'A1',{weaponId:'pulse'});let result={type:'none'};
-  assert.equal(projectile.targetId,'B2');
+  assert.equal(projectile.targetId,undefined);
   for(let frame=0;frame<1200&&result.type==='none';frame++)result=stepProjectile(projectile,state,1/120);
-  assert.equal(result.type,'tank');assert.equal(result.tankId,'B2');
+  assert.ok(['terrain','out','tank'].includes(result.type));
 });
 
-test('authoritative team shot resolves homing damage and consumes its ammunition',()=>{
+test('authoritative team 引力弹消耗弹药并记录爆炸',()=>{
   const state=createTeamMatch({seed:812});state.round=3;state.tanks.A1.ammo.pulse=1;state.tanks.A1.weapon='pulse';setAim(state,'A1',{heading:270,power:20});
   const shot=resolveTeamShot(state,'A1');
-  assert.equal(shot.weaponId,'pulse');assert.equal(state.tanks.A1.ammo.pulse,0);assert.equal(shot.impacts[0].damages.B2,WEAPONS.pulse.damage);
-  assert.equal(state.tanks.B2.hp,100-WEAPONS.pulse.damage);assert.equal(state.turn,'B1');
+  assert.equal(shot.weaponId,'pulse');assert.equal(state.tanks.A1.ammo.pulse,0);assert.equal(state.turn,'B1');assert.ok(shot.impacts.length>=1);
 });
 
 test('team shot uses real ballistics, records a replay path and advances one slot',()=>{

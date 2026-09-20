@@ -338,16 +338,33 @@ test('single-player games keep the original immediate reload path',()=>{
  assert.equal(g.round,round+1);assert.ok(g.ammo.length>=2);assert.equal(g.pendingReload,undefined);
 });
 
-test('multiplayer opens compensation only when the actual next actor is the leader',()=>{
- const g=compensationGame();pendingBoundary(g);
- const opened=settleOnlineBoundary(g);
- assert.equal(opened.kind,'compensation_open');assert.equal(g.phase,'compensation');assert.equal(g.compensation.chooser,'player');
+test('multiplayer opens compensation on a two-health gap regardless of the pending actor',()=>{
+ for(const turn of ['ai','player']){
+  const g=compensationGame();pendingBoundary(g,{turn});
+  const opened=settleOnlineBoundary(g);
+  assert.equal(opened.kind,'compensation_open');assert.equal(g.phase,'compensation');
+  assert.equal(g.compensation.chooser,'player');assert.equal(g.compensation.pendingTurn,turn);assert.equal(g.turn,turn);
+ }
 });
 
-test('multiplayer skips compensation when the weak side has the next normal action',()=>{
- const g=compensationGame();pendingBoundary(g,{turn:'player'});
+test('multiplayer skips compensation below a two-health gap',()=>{
+ const g=compensationGame();pendingBoundary(g,{weakHp:4,strongHp:5,turn:'ai'});
  const event=settleOnlineBoundary(g);
- assert.equal(event.kind,'reload');assert.equal(g.phase,'playing');assert.equal(g.round,2);
+ assert.equal(event.kind,'reload');assert.equal(g.phase,'playing');assert.equal(g.round,2);assert.equal(g.turn,'ai');
+});
+
+test('ordinary compensation preserves the pending actor and only reverse coin overrides it',()=>{
+ const ordinary=compensationGame();pendingBoundary(ordinary,{turn:'ai'});settleOnlineBoundary(ordinary);
+ ordinary.compensation.offers=['spareFuse','reverseCoin'];chooseCompensation(ordinary,'player',0);
+ assert.equal(ordinary.turn,'ai');
+
+ const weakAlreadyNext=compensationGame();pendingBoundary(weakAlreadyNext,{turn:'player'});settleOnlineBoundary(weakAlreadyNext);
+ weakAlreadyNext.compensation.offers=['spareFuse','reverseCoin'];chooseCompensation(weakAlreadyNext,'player',0);
+ assert.equal(weakAlreadyNext.turn,'player');
+
+ const coin=compensationGame();pendingBoundary(coin,{turn:'ai'});settleOnlineBoundary(coin);
+ coin.compensation.offers=['reverseCoin','spareFuse'];chooseCompensation(coin,'player',0);
+ assert.equal(coin.turn,'player');
 });
 
 test('event-level rare roll offers exactly one power strip',()=>{
@@ -388,7 +405,7 @@ test('bore film is private, coin changes opener, and remote forces night',()=>{
  const coin=compensationGame();pendingBoundary(coin);settleOnlineBoundary(coin);coin.compensation.offers=['reverseCoin','boreFilm'];chooseCompensation(coin,'player',0);assert.equal(coin.turn,'player');
  const remote=compensationGame();remote.items.player=['adrenaline'];remote.items.ai=['adrenaline'];pendingBoundary(remote);settleOnlineBoundary(remote);remote.compensation.offers=['lightRemote','reverseCoin'];chooseCompensation(remote,'player',0);
  assert.equal(remote.lighting,'night');assert.equal(remote.items.player.includes('adrenaline'),false);assert.equal(remote.items.ai.includes('adrenaline'),false);
- remote.pendingReload={beforeLighting:'night',pendingTurn:'player'};remote.turn='player';settleOnlineBoundary(remote);
+ remote.hp={player:4,ai:4};remote.pendingReload={beforeLighting:'night',pendingTurn:'player'};remote.turn='player';settleOnlineBoundary(remote);
  assert.equal(remote.lighting,'day','常规模式只强制一个黑夜回合');
 });
 
