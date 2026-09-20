@@ -65,6 +65,12 @@ const steelArcArt = (index, category) => `
     <span class="art-index">${String(index + 1).padStart(2, '0')} / ${escape(category)}</span>
   </div>`;
 
+const turningSanctuaryArt = (index, category) => `
+  <div class="game-art turning-sanctuary-art" aria-hidden="true">
+    <img src="/games/turning-sanctuary/assets/turning-sanctuary-cover-v1.jpg" alt="" width="1280" height="720" loading="lazy">
+    <span class="art-index">STILL WORLDS / ${escape(category)}</span>
+  </div>`;
+
 const presentations = {
   'anime-campus': {className:'game-card--campus', art:(i,c)=>`<div class="game-art aeroplane-art" aria-hidden="true"><img src="/games/anime-campus/assets/board.svg" alt="" loading="lazy"><span class="art-index">CAMPUS FESTIVAL / 60 格</span></div>`, extraTag:'六作品校园祭 / 事件与道具', note:'选择一位角色，和 AI 或好友走完一段放学旅程。'},
   'aeroplane-chess': {
@@ -113,6 +119,13 @@ const presentations = {
     extraTag: '四档火力 / 可破坏地形',
     soloLabel: '开始对战',
     note: 'A/D 移动；拖动左下弹弓盘自由瞄准，点击弹药卡与开火按钮完成攻击。',
+  },
+  'turning-sanctuary': {
+    className: 'game-card--turning-sanctuary',
+    art: turningSanctuaryArt,
+    extraTag: '3D 魔方之城 / 54 格',
+    soloLabel: '开始解谜',
+    note: '转动任意一层，城随之重组；收齐符印，走到会移动的家门。',
   },
 };
 

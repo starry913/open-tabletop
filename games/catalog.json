@@ -76,4 +76,15 @@
     "solo": "/games/anime-campus/index.html",
     "online": "/games/anime-campus/online.html"
   }
+,
+  {
+    "id": "turning-sanctuary",
+    "title": "旋转归途",
+    "subtitle": "奥德修斯的归家之旅",
+    "description": "站在魔方之城的表面，转动任意一层——城随之重组，你随城而动。收齐散落的符印，把回伊萨卡的路转出来。",
+    "players": "1 人单机",
+    "category": "空间解谜",
+    "version": "1.0.0",
+    "solo": "/games/turning-sanctuary/index.html"
+  }
 ]

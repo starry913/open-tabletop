@@ -4,7 +4,7 @@
 
 ![Open Tabletop collection](docs/collection-preview.jpg)
 
-An open-source collection of browser games that you can run yourself and extend. **The collection contains Texas Hold’em, unofficial Splendor: Pokémon, Abracada...What?, Aeroplane Chess, Chamber Pact and Steel Expedition**, with local AI, shared-screen play or online rooms depending on the game.
+An open-source collection of browser games that you can run yourself and extend. **The collection contains Texas Hold’em, unofficial Splendor: Pokémon, Abracada...What?, Aeroplane Chess, Chamber Pact, Steel Expedition, Campus Festival Chronicles and Turning Sanctuary**, with local AI, shared-screen play or online rooms depending on the game.
 
 [中文](README.md) · [Add a game](docs/adding-a-game.md) · [Architecture](docs/architecture.md) · [Contributing](CONTRIBUTING.md)
 
@@ -12,7 +12,7 @@ An open-source collection of browser games that you can run yourself and extend.
 
 [Open the game lobby](https://velvet-poker-friends.linming-dracarys.chatgpt.site)
 
-The public root URL is the seven-game selection homepage. All seven games provide friend rooms. Steel Expedition is a desktop 2D game with keyboard movement and mouse-or-keyboard aiming, weapon selection, firing and menus.
+The public root URL is the eight-game selection homepage. Seven of the games provide friend rooms. Steel Expedition is a desktop 2D game with keyboard movement and mouse-or-keyboard aiming, weapon selection, firing and menus.
 
 Texas Hold’em includes:
 
@@ -116,7 +116,7 @@ npm test
 npm run build:static
 ```
 
-Tests cover all seven game engines, plus room behavior, hidden-information projections and synchronization for all seven online games. The static build copies assets to `.dist/public`; solo Steel Expedition works there without a backend. Online rooms, including `/api/steel-arc`, require a Node or Worker + D1 backend.
+Tests cover all seven game engines, plus room behavior, hidden-information projections and synchronization for all seven online games; Turning Sanctuary ships as a build artifact and is asserted through the catalog and static routing. The static build copies assets to `.dist/public`; solo Steel Expedition and Turning Sanctuary work there without a backend. Online rooms, including `/api/steel-arc`, require a Node or Worker + D1 backend.
 
 The default entry point, `server/index.mjs`, runs in a Node environment you control. An optional Cloudflare adapter is included:
 
@@ -168,3 +168,7 @@ Original project code is licensed under the [MIT License](LICENSE). Third-party 
 ## Campus Festival Chronicles
 
 `/games/anime-campus/index.html` adds a 60-space crossover adventure, 51 fixed-map events, six characters and six items. Play solo with rule-based AI, with 2–4 people sharing a screen, or in a Node friend room at `/games/anime-campus/online.html`. Public releases are published separately from local development. Official portrait files are an optional Git-ignored asset pack; see [game documentation](games/anime-campus/README.md).
+
+## Turning Sanctuary
+
+A 3D puzzle: stand on the surface of a 3×3×3 cube city, rotate any layer so the city reorganises around you, collect the scattered sigils and walk to the moving door home. Single-player only, with no friend rooms. This entry is a Godot 4.7.2 Web export (single-threaded, no GDExtension) that loads about 65 MB on the first visit; open `/games/turning-sanctuary/index.html`. See [game documentation](games/turning-sanctuary/README.md) and [sources](games/turning-sanctuary/SOURCES.md).
