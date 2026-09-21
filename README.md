@@ -1,8 +1,14 @@
 # Open Tabletop
 
+## 地产大亨 · City Ledger
+
+经典 Monopoly 规则的非官方数字改编：40 格地产棋盘、落地后购买或跳过、双边交易、均匀建房、有限建筑库存、抵押和破产清算。支持单人 AI、2–6 人同屏、1–6 人好友房及刷新恢复。根目录启动后打开 `/games/monopoly/index.html` 或 `/games/monopoly/online.html`。单颗骰子每回合掷一次，购地和建设均需走到对应地产；不设拍卖。
+
+见 [玩法、改编差异与验证](games/monopoly/README.md)。Worker 接入需新增 `0008_monopoly_rooms.sql` 迁移，本地 Node 使用独立 `monopoly-rooms.json`。
+
 [![CI](https://github.com/DanTargaryen/open-tabletop/actions/workflows/ci.yml/badge.svg)](https://github.com/DanTargaryen/open-tabletop/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/Code-MIT-d2b77c)](LICENSE)
 
-一个可以自己运行、继续扩展的开源网页游戏合集。**现已包含德州扑克、璀璨宝石·宝可梦特别款、出包魔法师、飞行棋、暗膛协议、钢铁远征、校园祭冒险棋与旋转归途**：支持单人本地 AI、同屏玩法或创建房间与朋友联机。
+一个可以自己运行、继续扩展的开源网页游戏合集。**现已包含德州扑克、璀璨宝石·宝可梦特别款、出包魔法师、飞行棋、暗膛协议、钢铁远征、校园祭冒险棋、旋转归途与地产大亨**：支持单人本地 AI、同屏玩法或创建房间与朋友联机。
 
 [English](README.en.md) · [添加游戏](docs/adding-a-game.md) · [架构说明](docs/architecture.md) · [参与贡献](CONTRIBUTING.md)
 
@@ -10,7 +16,7 @@
 
 ## 先玩一局
 
-**[打开游戏大厅](https://velvet-poker-friends.linming-dracarys.chatgpt.site/)**，从八款游戏中选择单人模式、同屏玩法或好友房。
+**[打开游戏大厅](https://velvet-poker-friends.linming-dracarys.chatgpt.site/)**，从九款游戏中选择单人模式、同屏玩法或好友房。
 
 [宝可梦特别款 · 单人冒险](https://velvet-poker-friends.linming-dracarys.chatgpt.site/games/splendor/) · [宝可梦特别款 · 好友联机](https://velvet-poker-friends.linming-dracarys.chatgpt.site/games/splendor/online) · [德州扑克试玩](https://velvet-poker-friends.linming-dracarys.chatgpt.site)
 

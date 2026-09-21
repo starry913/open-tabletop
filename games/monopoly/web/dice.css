@@ -1,0 +1,19 @@
+.dice{gap:20px;perspective:600px;min-height:42px;align-items:center;justify-content:center}
+.die-shell{--die-size:clamp(30px,4.4cqi,48px);width:var(--die-size);height:var(--die-size);position:relative;perspective:480px;filter:drop-shadow(0 7px 3px #334a3229)}
+.dice-cube{width:100%;height:100%;position:relative;transform-style:preserve-3d;transform:rotateX(var(--rest-x,-16deg)) rotateY(var(--rest-y,-20deg));transition:transform .15s ease-out}
+.cube-face{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:3px;padding:18%;background:#fff9e8;border:1px solid #c9c2a6;border-radius:14%;backface-visibility:hidden;box-shadow:inset 1px 1px 2px #fff,inset -2px -2px 3px #bdb69b33}
+.cube-face i{display:block;border-radius:50%;min-width:0;min-height:0}
+.cube-face i.pip{background:#385743;box-shadow:inset 0 1px 1px #172e2699}
+.face-1{transform:translateZ(calc(var(--die-size)/2))}
+.face-2{transform:rotateY(90deg) translateZ(calc(var(--die-size)/2));background:#eee6d1}
+.face-3{transform:rotateX(90deg) translateZ(calc(var(--die-size)/2));background:#fffdf2}
+.face-4{transform:rotateX(-90deg) translateZ(calc(var(--die-size)/2));background:#ded6be}
+.face-5{transform:rotateY(-90deg) translateZ(calc(var(--die-size)/2));background:#f2ecd9}
+.face-6{transform:rotateY(180deg) translateZ(calc(var(--die-size)/2));background:#ece5cf}
+.dice.is-rolling .dice-cube{animation:dice-spin-3d .65s linear infinite;animation-direction:normal;transition:none}
+.dice.is-rolling .die-shell{animation:dice-hop .55s ease-in-out infinite alternate;animation-delay:calc(var(--die-index)*-.2s)}
+.dice.is-rolling .die-shell:nth-child(2) .dice-cube{animation-direction:reverse;animation-duration:.57s}
+@keyframes dice-spin-3d{0%{transform:rotateX(0deg) rotateY(0deg) rotateZ(0deg)}100%{transform:rotateX(360deg) rotateY(540deg) rotateZ(180deg)}}
+@keyframes dice-hop{from{transform:translateY(1px) rotate(-7deg)}to{transform:translateY(-13px) rotate(8deg)}}
+@media(max-width:600px){.die-shell{--die-size:28px}.dice{gap:14px;min-height:34px}.cube-face{gap:2px}}
+@media(prefers-reduced-motion:reduce){.dice.is-rolling .dice-cube,.dice.is-rolling .die-shell{animation:none}.dice.is-rolling{opacity:.6}.dice-cube{transition:none}}

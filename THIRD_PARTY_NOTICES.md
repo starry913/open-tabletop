@@ -61,3 +61,7 @@ The campus board layout, rules engine, UI, and synthesized sound are project cod
 
 `games/turning-sanctuary/web/` is a Godot 4.7.2 Web export of the project's own 3D rotating-cube puzzle, contributed as a build artifact rather than hand-written front-end code. The bundle embeds the Godot Engine runtime (MIT / Expat, full notice in `games/turning-sanctuary/licenses/Godot-Engine-COPYRIGHT.txt`), Noto Sans SC and Noto Sans Math subsets (SIL OFL 1.1, notice in the same folder), and CC0 1.0 music and UI sound effects by tricksntraps, The Cynic Project, Yoiyami and Kenney. The card cover image is a screenshot of the game itself. Rules, levels, models and UI are original work; no published board game artwork, scans or rulebook text are included. Sources and licences: [game sources](games/turning-sanctuary/SOURCES.md).
 
+
+## City Ledger / Monopoly rules reference
+
+The `games/monopoly` game is an unofficial digital adaptation referencing Hasbro's classic Monopoly rules. Monopoly and related marks remain the property of their respective owners; no affiliation or endorsement is claimed. The game uses original Chinese place names, event descriptions, architectural line art, 40 AI-generated 3D tile illustrations, and CSS, with no scanned boards, logos, commercial character assets or recordings. Rule sources and explicit adaptation differences are recorded in `games/monopoly/SOURCES.md` and its README.

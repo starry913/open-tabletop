@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#eee9df"><title>地产大亨 · Open Tabletop</title><link rel="stylesheet" href="./style.css"><link rel="stylesheet" href="./map.css"><link rel="stylesheet" href="./tile-art.css"><link rel="stylesheet" href="./dice.css"></head>
+<body>
+<header><a class="back" href="/">← 开桌</a><div class="wordmark">CITY LEDGER <span>城市资产簿</span></div><nav><button id="sound" aria-label="切换音效">音效：关</button><button id="rules">玩法</button><button id="new">新一局</button><a id="mode-link" href="./online.html">好友房 ↗</a></nav></header>
+<main>
+ <div class="page-title"><div><p class="eyebrow">A PROPERTY TRADING GAME</p><h1>地产大亨<span>每一条街，都有你的计划。</span></h1></div><p id="mode-label">单人 · 本地 AI</p></div>
+ <div id="error" class="notice" role="alert" hidden></div>
+ <section id="room-panel" class="room-panel" hidden>
+   <div id="room-entry"><h2>与朋友开一桌</h2><p>2–6 个席位，空位由 AI 补齐。分享房间码即可加入。</p><div class="form-row"><label>昵称<input id="nickname" maxlength="16" value="街区访客" autocomplete="nickname"></label><label>席位<select id="room-count"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select></label><button id="create-room" class="primary">创建房间</button></div><div class="form-row"><label>房间码<input id="room-code" maxlength="6" placeholder="六位房间码" autocomplete="off"></label><button id="join-room">加入房间</button><button id="resume-room" hidden>重新连接</button></div></div>
+   <div id="room-waiting" hidden><div class="room-heading"><h2>房间 <strong id="waiting-code"></strong></h2><span>空位自动补 AI</span></div><ul id="waiting-roster"></ul><div class="button-row"><button id="ready-room">我准备好了</button><button id="start-room" class="primary">开始游戏</button></div></div>
+   <div id="room-tools" hidden><span id="connection">已连接</span><button id="copy-invite">复制邀请</button><button id="leave-room">离开房间</button></div>
+ </section>
+ <div class="game-layout">
+  <section class="table-area" aria-label="棋盘与游戏记录">
+   <div class="board-controls"><div><b>城市地图</b><span id="board-view-hint">完整地图 · 点击地块查看详情</span></div><div class="board-view-buttons"><button id="focus-piece">定位棋子</button></div></div>
+   <div class="board-viewport" id="board-viewport"><div class="board-frame"><div id="board" class="board" aria-label="40 格地产棋盘">
+    <div class="board-center">
+      <div class="city-brand"><p class="center-kicker">THE CITY IS YOURS TO BUILD</p><h2>地产大亨</h2><p class="center-sub">CITY LEDGER · 一城一局</p></div>
+      <div id="city-scene" class="city-scene"></div>
+      <div class="center-status"><div id="dice" class="dice" aria-label="骰子"></div><p id="center-turn"></p><p id="bank-stock" class="bank-stock"></p></div>
+      <span class="compass" aria-hidden="true">N<br>↑</span><span class="map-edition">EST. 2026<br>OPEN TABLETOP</span>
+    </div>
+   </div></div></div>
+   <div class="map-caption"><span id="map-selection">点选地块，查看你的下一笔投资。</span><button id="inspect-property">查看产权 ↓</button></div><div id="district-legend" class="district-legend" aria-label="八个街区"></div>
+   <section class="journal"><div class="section-heading"><h2>街区动态</h2><span id="round">第 1 轮</span></div><ol id="log" aria-live="polite"></ol></section>
+  </section>
+  <aside>
+   <section class="action-panel"><p id="phase-label" class="eyebrow">你的回合</p><h2 id="action-title">从一条街开始</h2><p id="action-hint"></p><div id="actions" class="actions"></div><div id="trade-summary" hidden></div></section>
+   <section class="players-panel"><div class="section-heading"><h2>同桌玩家</h2><span>现金 / 地产</span></div><div id="players"></div></section>
+   <section class="property-panel"><div class="section-heading"><h2>产权簿</h2><select id="property-select" aria-label="选择查看地产"></select></div><div id="property-detail"></div><div id="property-actions" class="property-actions"></div></section>
+  </aside>
+ </div>
+ <footer>经典 Monopoly 规则的非官方数字改编 · 原创中文地图与视觉 · 全部使用虚拟资金</footer>
+</main>
+<dialog id="setup-dialog"><form id="setup-form"><p class="eyebrow">WELCOME TO THE NEIGHBORHOOD</p><h2>为你的第一条街落笔。</h2><p>购买、谈判、建设。让城市一点点变成你的计划。</p><label>游戏模式<select id="local-mode"><option value="solo">单人，与 AI 同桌</option><option value="local">同屏，轮流操作</option></select></label><label>玩家人数<select id="player-count"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select></label><p class="muted">每人 15000 · 标准破产淘汰局 · 自动本地保存</p><div class="button-row"><button type="button" data-close="setup-dialog">返回</button><button type="submit" class="primary">开始这场旅程 →</button></div></form></dialog>
+<dialog id="trade-dialog"><form id="trade-form"><p class="eyebrow">MAKE A DEAL</p><h2>谈一笔双方认可的交易</h2><label>交易对象<select id="trade-partner"></select></label><div class="trade-columns"><section><h3>你给出</h3><label>现金<input id="give-cash" type="number" min="0" step="10" value="0"></label><div id="give-properties"></div></section><section><h3>你获得</h3><label>现金<input id="take-cash" type="number" min="0" step="10" value="0"></label><div id="take-properties"></div></section></div><p class="muted">抵押地产接收者立即付银行 10% 转让费，之后赎回另付本息。建筑不能直接转让；每回合最多两次提案。</p><div class="button-row"><button type="button" data-close="trade-dialog">返回</button><button type="submit" class="primary">发送报价</button></div></form></dialog>
+<dialog id="rules-dialog"><p class="eyebrow">THE HOUSE RULEBOOK</p><h2>先读懂城市，再成为大亨。</h2><h3>规则骨架</h3><p>每人 15000，单颗骰子走格，每回合只掷一次，经过或抵达起点领 2000。走到无主地产后，由当前玩家选择购买或不买；不买则保持无主，其他玩家不能抢购；其他玩家的未抵押地产自动收租。收齐同色后，只有本回合走到自己的那块地，才能在该地均匀建房或将四房升级为酒店。银行有 32 间房、12 座酒店。</p><p>掷出 6 点也不续掷。在狱中仍能收租，支付 500 或用出狱卡后正常掷骰；坐牢时可尝试掷出 6 点出狱，第三次失败必须付 500 后按刚才点数移动。</p><p>欠债先卖房、抵押或谈判筹款。建筑按半价卖回，抵押不收租，赎回付抵押额加 10%。资产仍不足才破产，欠玩家则资产交给债权人，欠银行则地产收回为无主并解除抵押，等待之后有人走到这里再购买。最后未破产者获胜。免费停车不发钱。</p><h3>本版明确的数字化差异</h3><ul><li>单骰改编：每回合只掷一次，公用事业直接使用本次点数计租。</li><li>固定第一席先手；2–6 人，自动收租。</li><li>建设仅限当前玩家本回合移动并结算后的所在地产；掷骰前、偿债时或其他地点不能建设。出售、抵押、赎回与交易仍在对应资产管理阶段进行。</li><li>落地购地：只有抵达无主地产的玩家可以按标价购买，也可以跳过；本版不设拍卖。</li><li>建筑库存先行动者先购；缺四间房无法单独降级酒店，可整色组清仓。</li><li>出狱卡可保留使用，但首版不支持单独交易。抵押转让先保留抵押并缴费，赎回为另一操作。</li><li>40 格中文地名与事件文案为原创；两套固定 16 张事件牌与经典事件效果相近，非特定盒装逐卡复刻。无股票、角色技能、奖池或额外贷款。</li><li>好友房每个行动窗口 60 秒，超时 AI 代行一步；真人收到交易报价超时自动拒绝。无人轮询时暂停推进。</li></ul><p>规则依据：<a href="https://instructions.hasbro.com/api/download/C1009_en-nz_monopoly-classic-game.pdf" target="_blank" rel="noopener">Hasbro C1009 说明书</a>。与本页差异列表一起阅读。</p><button class="primary" data-close="rules-dialog">明白了</button></dialog>
+<script type="module" src="./ui.js"></script>
+</body></html>

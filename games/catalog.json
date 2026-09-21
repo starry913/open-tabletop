@@ -75,8 +75,7 @@
     "version": "0.1.0",
     "solo": "/games/anime-campus/index.html",
     "online": "/games/anime-campus/online.html"
-  }
-,
+  },
   {
     "id": "turning-sanctuary",
     "title": "旋转归途",
@@ -86,5 +85,16 @@
     "category": "空间解谜",
     "version": "1.0.0",
     "solo": "/games/turning-sanctuary/index.html"
+  },
+  {
+    "id": "monopoly",
+    "title": "地产大亨",
+    "subtitle": "CITY LEDGER / MONOPOLY",
+    "description": "从第一条街到整座城市。落地购地、与朋友谈判，在建设与现金之间做出你的选择。经典规则的非官方数字改编。",
+    "players": "1 人 AI / 2–6 人同屏 / 1–6 人好友房",
+    "category": "地产交易",
+    "version": "0.1.0",
+    "solo": "/games/monopoly/index.html",
+    "online": "/games/monopoly/online.html"
   }
 ]

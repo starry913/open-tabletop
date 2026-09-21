@@ -1,10 +1,14 @@
 # Open Tabletop
 
+## City Ledger
+
+An unofficial digital adaptation of classic Monopoly: 40 spaces, optional purchases upon landing, no auctions, confirmed trades, even building, limited building stock, mortgages and bankruptcy. Supports solo AI, 2–6 local seats and 1–6 human players in online rooms with AI fill. Start the root server and open `/games/monopoly/index.html` or `/games/monopoly/online.html`. A single die is rolled once per turn; buying and building require landing on the property. See [rules and adaptation boundaries](games/monopoly/README.md). Cloudflare requires migration `0008_monopoly_rooms.sql`; Node uses its own private `monopoly-rooms.json` file.
+
 [![CI](https://github.com/DanTargaryen/open-tabletop/actions/workflows/ci.yml/badge.svg)](https://github.com/DanTargaryen/open-tabletop/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/Code-MIT-d2b77c)](LICENSE)
 
 ![Open Tabletop collection](docs/collection-preview.jpg)
 
-An open-source collection of browser games that you can run yourself and extend. **The collection contains Texas Hold’em, unofficial Splendor: Pokémon, Abracada...What?, Aeroplane Chess, Chamber Pact, Steel Expedition, Campus Festival Chronicles and Turning Sanctuary**, with local AI, shared-screen play or online rooms depending on the game.
+An open-source collection of browser games that you can run yourself and extend. **The collection contains Texas Hold’em, unofficial Splendor: Pokémon, Abracada...What?, Aeroplane Chess, Chamber Pact, Steel Expedition, Campus Festival Chronicles Turning Sanctuary, and City Ledger**, with local AI, shared-screen play or online rooms depending on the game.
 
 [中文](README.md) · [Add a game](docs/adding-a-game.md) · [Architecture](docs/architecture.md) · [Contributing](CONTRIBUTING.md)
 
@@ -116,7 +120,7 @@ npm test
 npm run build:static
 ```
 
-Tests cover all seven game engines, plus room behavior, hidden-information projections and synchronization for all seven online games; Turning Sanctuary ships as a build artifact and is asserted through the catalog and static routing. The static build copies assets to `.dist/public`; solo Steel Expedition and Turning Sanctuary work there without a backend. Online rooms, including `/api/steel-arc`, require a Node or Worker + D1 backend.
+Tests cover all seven game engines, plus room behavior, hidden-information projections and synchronization for all seven online games; Turning Sanctuary ships as a build artifact and is asserted through the catalog and static routing. The static build copies assets to `.dist/public`; solo Steel Expedition Turning Sanctuary, and City Ledger work there without a backend. Online rooms, including `/api/steel-arc`, require a Node or Worker + D1 backend.
 
 The default entry point, `server/index.mjs`, runs in a Node environment you control. An optional Cloudflare adapter is included:
 

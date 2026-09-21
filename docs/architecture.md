@@ -1,5 +1,11 @@
 # 架构与运行边界
 
+## 地产大亨接入（新增开发版本）
+
+源码目录新增第九款游戏 `monopoly`，公开目录仅为 `games/monopoly/web/`。本地与服务端共享纯规则引擎，Node `/api/monopoly` 使用独立 `monopoly-rooms.json`，Worker 使用 `monopoly_rooms` 和 `monopoly_limits`，对应迁移 `0008_monopoly_rooms.sql`。客户端接收公开经济状态，但不接收事件牌序或结算队列。当前行动者由普通回合、落地购地、交易响应与债务阶段决定，不能只用回合拥有者判断权限。
+
+每个行动窗口 60 秒；真人交易响应超时拒绝，其他动作超时由 AI 代行。轮询推动超时，revision CAS 和请求编号避免重复结算。各模式的改编边界见 `games/monopoly/README.md`；适配器通过测试不代表已公网发布。下文七款游戏的历史部署说明保留为既有发布背景。
+
 Open Tabletop 将合集入口与具体游戏分开。当前七款游戏均提供联机入口，规则和服务使用原生浏览器代码与 Node.js 内置能力；出包魔法师与暗膛协议的 3D 界面依赖 Three.js，钢铁远征只使用 2D Canvas。
 
 ## 请求如何流动
