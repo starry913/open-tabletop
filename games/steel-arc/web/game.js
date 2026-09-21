@@ -92,9 +92,10 @@ function startGame(practice=false){
 
 function activate(action){
   audio.confirm();
-  if(action==='start'||action==='restart'){startGame();return;}
+  if(action==='start'){startGame();return;}
+  if(action==='restart'){startGame(practiceMode);return;}
   if(action==='practice'){startGame(true);return;}
-  if(action==='resume'){setMode('playing');return;}
+  if(action==='resume'){setMode(practiceMode?'practice':'playing');return;}
   if(action==='guide'){tutorial.open();return;}
   if(action==='sound'){audio.toggle();drawMenu(mode);return;}
   if(action==='title'){setMode('title');return;}
@@ -154,7 +155,7 @@ const fineAim=createFineAimControls({container:aimPanel,getValues:()=>{
 weaponRack.addEventListener('click',event=>{const card=event.target.closest('.weapon-card');if(card)attemptSelectWeapon(card.dataset.weapon);});
 weaponRack.addEventListener('keydown',event=>{const card=event.target.closest('.weapon-card');if(card&&(event.code==='Enter'||event.code==='Space')){event.preventDefault();event.stopPropagation();attemptSelectWeapon(card.dataset.weapon);}});
 fireButton.addEventListener('click',fireCurrent);
-pauseButton.addEventListener('click',()=>{if(mode==='playing')setMode('paused');});
+pauseButton.addEventListener('click',()=>{if(mode==='playing'||mode==='practice')setMode('paused');});
 
 window.addEventListener('keydown',event=>{
   if(event.target.closest?.('select,input'))return;
@@ -167,7 +168,7 @@ window.addEventListener('keydown',event=>{
     if(['KeyW','ArrowUp'].includes(code)){menuIndex=(menuIndex-1+items.length)%items.length;audio.navigate();drawMenu(mode);}
     else if(['KeyS','ArrowDown'].includes(code)){menuIndex=(menuIndex+1)%items.length;audio.navigate();drawMenu(mode);}
     else if(code==='Enter'||code==='Space')activate(items[menuIndex][1]);
-    else if(mode==='paused'&&code==='Escape')setMode('playing');
+    else if(mode==='paused'&&code==='Escape')setMode(practiceMode?'practice':'playing');
     else if(mode==='ended'&&code==='KeyR')startGame();
     return;
   }
@@ -181,7 +182,7 @@ window.addEventListener('keydown',event=>{
   keys.add(code);updateUI();
 });
 window.addEventListener('keyup',event=>keys.delete(event.code));
-window.addEventListener('blur',()=>{keys.clear();if(mode==='playing')setMode('paused');});
+window.addEventListener('blur',()=>{keys.clear();if(mode==='playing'||mode==='practice')setMode('paused');});
 
 function spawnExplosion(explosion){
     renderer.setFrame({state,cameraX,projectiles,particles,shockwaves,damageLabels});
