@@ -86,6 +86,10 @@ function drawTankTurret(isPlayer,palette){
   ctx.strokeStyle='#172832';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(-2,isPlayer?-43:-47,7,Math.PI,0);ctx.stroke();ctx.strokeStyle='#aab7ad';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-8,isPlayer?-45:-49);ctx.lineTo(-12,isPlayer?-61:-65);ctx.stroke();ctx.fillStyle=palette.light;ctx.beginPath();ctx.arc(-12,isPlayer?-62:-66,1.8,0,Math.PI*2);ctx.fill();
 }
 function drawTank(tank,isPlayer){
+  if(tank.isTarget){
+    ctx.save();ctx.translate(tank.x,tank.y);ctx.strokeStyle='#10222d';ctx.lineWidth=4;ctx.fillStyle='#d6d0b4';ctx.beginPath();ctx.arc(0,-42,28,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.strokeStyle='#b4473e';ctx.lineWidth=6;ctx.beginPath();ctx.arc(0,-42,18,0,Math.PI*2);ctx.stroke();ctx.strokeStyle='#7d3837';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(0,-70);ctx.lineTo(0,-14);ctx.moveTo(-28,-42);ctx.lineTo(28,-42);ctx.stroke();ctx.fillStyle='#5b4b3e';ctx.fillRect(-5,-14,10,14);ctx.fillRect(-22,0,44,6);ctx.restore();
+    return;
+  }
   const palette=isPlayer?{main:'#e87932',light:'#ffc24d',dark:'#93412f',shadow:'#6d3433',track:'#d57843'}:{main:'#39aeb8',light:'#82e0d9',dark:'#24667b',shadow:'#235367',track:'#4bb8b7'};
   ctx.save();ctx.translate(tank.x,tank.y);ctx.rotate(tank.slope);ctx.scale(tank.direction,1);ctx.lineJoin='round';
   ctx.globalAlpha=.25;ctx.fillStyle='#06131b';ctx.beginPath();ctx.ellipse(0,14,45,8,0,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;

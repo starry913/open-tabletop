@@ -15,9 +15,9 @@ const hud=$('#battle-hud'),aimPanel=$('#aim-panel'),deck=$('#command-deck'),over
 const announcer=$('#announcer'),callout=$('#status-callout');
 const weaponRack=$('#weapon-rack'),fireButton=$('#fire-button'),pauseButton=$('#pause-button');
 const aimControl=$('#aim-control'),aimKnob=$('#aim-knob'),aimPullVector=$('#aim-pull-vector'),aimShotVector=$('#aim-shot-vector');
-const ui={playerHp:$('#player-hp'),enemyHp:$('#enemy-hp'),playerHpText:$('#player-hp-text'),enemyHpText:$('#enemy-hp-text'),round:$('#round-label'),turn:$('#turn-label'),angle:$('#angle-value'),power:$('#power-value'),fuel:$('#fuel-value'),fuelBar:$('#fuel-bar'),fireState:$('#fire-state')};
+const ui={playerHp:$('#player-hp'),enemyHp:$('#enemy-hp'),playerHpText:$('#player-hp-text'),enemyHpText:$('#enemy-hp-text'),enemyName:$('#enemy-name'),round:$('#round-label'),turn:$('#turn-label'),angle:$('#angle-value'),power:$('#power-value'),fuel:$('#fuel-value'),fuelBar:$('#fuel-bar'),fireState:$('#fire-state')};
 const keys=new Set();
-let mode='title',menuIndex=0,returnMode='title',state=createMatch({seed:7126}),rng=seededRandom(7126);
+let mode='title',menuIndex=0,returnMode='title',state=createMatch({seed:7126}),rng=seededRandom(7126),practiceMode=false;
 let projectiles=[],particles=[],shockwaves=[],damageLabels=[],lastTime=performance.now(),accumulator=0,settleAt=0,aiPlan=null,aiAimStart=0,calloutTimer=0,shake=0,moveSoundAt=0,introAt=0;
 let cameraX=0,renderScale=1;
 const battleCamera=new BattleCamera();
@@ -47,7 +47,7 @@ window.addEventListener('resize',resizeCanvas);
 resizeCanvas();
 
 const menus={
-  title:[['开始对战','start'],['作战手册','guide'],['声音：开启','sound'],['返回游戏合集','exit']],
+  title:[['开始对战','start'],['练习场','practice'],['作战手册','guide'],['声音：开启','sound'],['返回游戏合集','exit']],
   paused:[['继续战斗','resume'],['重新部署','restart'],['作战手册','guide'],['声音：开启','sound'],['返回游戏合集','exit']],
   ended:[['再来一局','restart'],['返回主菜单','title'],['返回游戏合集','exit']],
 };
@@ -74,16 +74,18 @@ function drawMenu(type=mode){
 }
 
 function setMode(next){
-  audio.setBattle(next==='intro'||next==='playing');
+  audio.setBattle(next==='intro'||next==='playing'||next==='practice');
   mode=next;keys.clear();
   const showOverlay=['title','paused','ended'].includes(next);overlay.classList.toggle('hidden',!showOverlay);
-  const fighting=['intro','playing','paused','ended'].includes(next)||(next==='guide'&&returnMode!=='title');hud.classList.toggle('hidden',!fighting);aimPanel.classList.toggle('hidden',!fighting);deck.classList.toggle('hidden',!fighting);
+  const fighting=['intro','playing','practice','paused','ended'].includes(next)||(next==='guide'&&returnMode!=='title');hud.classList.toggle('hidden',!fighting);aimPanel.classList.toggle('hidden',!fighting);deck.classList.toggle('hidden',!fighting);
   if(showOverlay){menuIndex=0;drawMenu(next);}
-  if(next==='playing')announce(state.turn==='player'?'你的回合':'守垒者回合');
+  if(next==='playing'||next==='practice')announce(practiceMode?'练习场：可以反复试射':state.turn==='player'?'你的回合':'守垒者回合');
 }
 
-function startGame(){
-  const seed=(Date.now()^(Math.random()*0xffffffff))>>>0;state=createMatch({seed,difficulty});battleCamera.reset();rng=seededRandom(seed^0xa51c);projectiles=[];particles=[];shockwaves=[];damageLabels=[];settleAt=0;aiPlan=null;shake=0;
+function startGame(practice=false){
+  practiceMode=practice;const seed=(Date.now()^(Math.random()*0xffffffff))>>>0;state=createMatch({seed,difficulty});state.practice=practice;
+  if(practice){const player=state.tanks.player,target=state.tanks.enemy;player.unlockedTiers=[1,2,3,4];for(const id of WEAPON_IDS)player.ammo[id]=Infinity;target.isTarget=true;target.name='固定靶';target.hp=100;target.maxHp=100;target.heading=180;target.angle=0;target.power=0;}
+  battleCamera.reset();rng=seededRandom(seed^0xa51c);projectiles=[];particles=[];shockwaves=[];damageLabels=[];settleAt=0;aiPlan=null;shake=0;
   cameraX=Math.max(0,Math.min(WORLD_WIDTH-WORLD_VIEW_WIDTH,state.tanks.player.x-WORLD_VIEW_WIDTH*.32));
   cameraX=0;introAt=performance.now();setMode('intro');showCallout('战场侦察 · 视野扫描中',INTRO_DURATION);audio.confirm();updateUI();
 }
@@ -91,6 +93,7 @@ function startGame(){
 function activate(action){
   audio.confirm();
   if(action==='start'||action==='restart'){startGame();return;}
+  if(action==='practice'){startGame(true);return;}
   if(action==='resume'){setMode('playing');return;}
   if(action==='guide'){tutorial.open();return;}
   if(action==='sound'){audio.toggle();drawMenu(mode);return;}
@@ -99,13 +102,13 @@ function activate(action){
 }
 
 function fireCurrent(){
-  if(mode!=='playing'||state.turn!=='player'||state.phase!=='aim'||hasFallingSupply(state))return;
+  if((mode!=='playing'&&mode!=='practice')||state.turn!=='player'||state.phase!=='aim'||hasFallingSupply(state))return;
   const shots=fireWeapon(state,'player');if(!shots.length){showCallout('该弹种已经用完');return;}
   projectiles=shots.map(p=>({...p,trail:[]}));audio.fire(state.tanks.player.weapon);shake=6;showCallout(`${WEAPONS[state.tanks.player.weapon].name} · 发射`,700);announce('炮弹发射');updateUI();
 }
 
 function canControlPlayer(){
-  return mode==='playing'&&state.turn==='player'&&state.phase==='aim'&&!hasFallingSupply(state);
+  return (mode==='playing'||mode==='practice')&&state.turn==='player'&&state.phase==='aim'&&!hasFallingSupply(state);
 }
 
 function attemptSelectWeapon(weaponId){
@@ -168,7 +171,7 @@ window.addEventListener('keydown',event=>{
     else if(mode==='ended'&&code==='KeyR')startGame();
     return;
   }
-  if(mode!=='playing')return;
+  if(mode!=='playing'&&mode!=='practice')return;
   if(code==='Escape'){setMode('paused');return;}
   if(state.turn==='player'&&state.phase==='aim'&&!hasFallingSupply(state)){
     const weaponId=WEAPON_IDS.find(id=>`Digit${WEAPONS[id].key}`===code);
@@ -200,7 +203,9 @@ function spawnExplosion(explosion){
     accumulator-=1/120;
   }
   if(projectiles.length&&projectiles.every(p=>!p.alive)&&!settleAt)settleAt=performance.now()+850;
-  if(settleAt&&performance.now()>=settleAt){settleAt=0;projectiles=[];const result=finishTurn(state);processEngineEvents();updateUI();
+  if(settleAt&&performance.now()>=settleAt){settleAt=0;projectiles=[];
+    if(practiceMode){state.phase='aim';state.turn='player';state.tanks.enemy.hp=state.tanks.enemy.maxHp;state.tanks.enemy.x=WORLD_WIDTH*.82;state.tanks.enemy.y=terrainHeightAt(state.terrain,state.tanks.enemy.x)-15;state.tanks.enemy.slope=0;processEngineEvents();updateUI();showCallout('靶子已复位 · 继续试射',900);return;}
+    const result=finishTurn(state);processEngineEvents();updateUI();
     if(result){setTimeout(()=>{setMode('ended');result==='player'?audio.win():audio.lose();announce(result==='player'?'战斗胜利':result==='enemy'?'战斗失败':'平局');},450);return;}
     if(state.turn==='enemy'){showCallout('守垒者正在校准弹道',1300);aiPlan=null;aiAimStart=performance.now()+550;}
     else{showCallout('你的回合 · 可以行动',1200);announce('你的回合');}
@@ -208,7 +213,7 @@ function spawnExplosion(explosion){
 }
 
 function updateAI(now,dt){
-  if(state.turn!=='enemy'||state.phase!=='aim'||hasFallingSupply(state))return;
+  if(practiceMode||state.turn!=='enemy'||state.phase!=='aim'||hasFallingSupply(state))return;
   const enemy=state.tanks.enemy;
   if(!aiPlan&&now>=aiAimStart){aiPlan=chooseAiAction(state,rng);selectWeapon(state,'enemy',aiPlan.weaponId);aiAimStart=now;}
   if(!aiPlan)return;
@@ -238,7 +243,7 @@ function updateIntro(now){
     cameraX=(WORLD_WIDTH-WORLD_VIEW_WIDTH)*(1-eased);
   }
   if(progress>=1){
-    cameraX=0;battleCamera.reset();setMode('playing');showCallout('第 1–2 回合 · 仅开放校准弹',1500);updateUI();
+    cameraX=0;battleCamera.reset();setMode(practiceMode?'practice':'playing');showCallout(practiceMode?'练习场 · 所有炮弹无限':'第 1–2 回合 · 仅开放校准弹',1500);updateUI();
   }
 }
 
@@ -254,6 +259,7 @@ function updateCamera(dt){
 
 function updateUI(){
   const player=state.tanks.player,enemy=state.tanks.enemy;
+  ui.enemyName.textContent=practiceMode?'固定靶':'守垒者';
   ui.playerHp.style.width=`${player.hp}%`;ui.enemyHp.style.width=`${enemy.hp}%`;ui.playerHpText.textContent=player.hp;ui.enemyHpText.textContent=enemy.hp;
   ui.round.textContent=`回合 ${String(state.round).padStart(2,'0')}`;ui.turn.textContent=mode==='intro'?'战场侦察':state.phase==='ended'?'战斗结束':state.turn==='player'?'你的回合':'敌方回合';
   const playerHeading=Number.isFinite(player.heading)?player.heading:(player.direction===1?player.angle:180-player.angle);
@@ -261,8 +267,8 @@ function updateUI(){
   fineAim.update({heading:playerHeading,power:player.power});
   ui.fuel.textContent=Math.ceil(player.fuel);ui.fuelBar.style.width=`${player.fuel/player.maxFuel*100}%`;
   document.querySelectorAll('[data-ammo]').forEach(label=>label.textContent=`×${player.ammo[label.dataset.ammo]??0}`);
-  document.querySelectorAll('.weapon-card').forEach(card=>{const id=card.dataset.weapon,weapon=WEAPONS[id],locked=weapon.tier<4&&!player.unlockedTiers.includes(weapon.tier)||(weapon.tier===4&&state.round<3),empty=!locked&&id!=='calibration'&&(player.ammo[id]??0)<=0;card.classList.toggle('active',player.weapon===id);card.classList.toggle('locked',locked);card.classList.toggle('empty',empty);card.setAttribute('aria-disabled',String(!canControlPlayer()||locked||empty));card.setAttribute('aria-pressed',String(player.weapon===id));});
-  const ready=canControlPlayer();fireButton.classList.toggle('locked',!ready);fireButton.disabled=!ready;pauseButton.disabled=mode!=='playing';
+  document.querySelectorAll('.weapon-card').forEach(card=>{const id=card.dataset.weapon,weapon=WEAPONS[id],locked=!practiceMode&&(weapon.tier<4&&!player.unlockedTiers.includes(weapon.tier)||(weapon.tier===4&&state.round<3)),empty=!practiceMode&&!locked&&id!=='calibration'&&(player.ammo[id]??0)<=0;card.classList.toggle('active',player.weapon===id);card.classList.toggle('locked',locked);card.classList.toggle('empty',empty);card.setAttribute('aria-disabled',String(!canControlPlayer()||locked||empty));card.setAttribute('aria-pressed',String(player.weapon===id));});
+  const ready=canControlPlayer();fireButton.classList.toggle('locked',!ready);fireButton.disabled=!ready;pauseButton.disabled=mode!=='playing'&&mode!=='practice';
   const pull=(player.power-20)/80*.36,pullRadians=playerHeading*Math.PI/180,pullX=-Math.cos(pullRadians)*pull,pullY=Math.sin(pullRadians)*pull,pullLength=Math.hypot(pullX,pullY)*100,pullAngle=Math.atan2(pullY,pullX)*180/Math.PI;
   aimKnob.style.left=`${50+pullX*100}%`;aimKnob.style.top=`${50+pullY*100}%`;
   aimPullVector.style.width=`${pullLength}%`;aimPullVector.style.transform=`rotate(${pullAngle}deg)`;
@@ -273,7 +279,7 @@ function updateUI(){
 const renderer=createBattleRenderer(ctx);
 const {drawSky,drawTerrain,drawTank,drawSupplies,drawFireZones,drawAimDots,drawProjectiles,drawEffects,drawVignette,roundedRect,polygon}=renderer;
 function drawWorldLocator(){
-  if(mode!=='playing')return;const x=472,y=98,w=336,h=13;
+  if(mode!=='playing'&&mode!=='practice')return;const x=472,y=98,w=336,h=13;
   ctx.fillStyle='#061b28b8';roundedRect(x,y,w,h,7);ctx.fill();ctx.strokeStyle='#d8e7d22e';ctx.lineWidth=1;ctx.stroke();
   const left=Math.max(0,cameraX),right=Math.min(WORLD_WIDTH,cameraX+VIEW_WIDTH/battleCamera.zoom),viewX=x+left/WORLD_WIDTH*w,viewW=Math.max(0,right-left)/WORLD_WIDTH*w;ctx.fillStyle='#f6e3a326';roundedRect(viewX,y+3,viewW,7,4);ctx.fill();
   for(const [tank,color] of [[state.tanks.player,'#ff9b42'],[state.tanks.enemy,'#5be1e1']]){const px=x+tank.x/WORLD_WIDTH*w;ctx.fillStyle=color;ctx.beginPath();ctx.arc(px,y+6.5,3.5,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#071b27';ctx.lineWidth=1.5;ctx.stroke();}
@@ -290,7 +296,7 @@ function render(){
 function frame(now){
   const dt=Math.min(.033,(now-lastTime)/1000||0);lastTime=now;
   if(mode==='intro'){updateIntro(now);updateEffects(dt);updateUI();}
-  if(mode==='playing'){stepSupplyDrops(state,dt);processEngineEvents();updateInput(dt,now);if(state.phase==='flight')updateProjectiles(dt);else updateAI(now,dt);updateEffects(dt);updateUI();}
+  if(mode==='playing'||mode==='practice'){stepSupplyDrops(state,dt);processEngineEvents();updateInput(dt,now);if(state.phase==='flight')updateProjectiles(dt);else updateAI(now,dt);updateEffects(dt);updateUI();}
   if(mode!=='intro')updateCamera(dt);render();requestAnimationFrame(frame);
 }
 
