@@ -1,6 +1,6 @@
 import {MIN_POWER,MAX_POWER,POWER_SPAN} from './aim-limits.js';
 import {randomNickname} from './nicknames.js';
-import {biomeFor,materialAt} from './biomes.js';
+import {BIOMES,BIOME_IDS,biomeFor,materialAt} from './biomes.js';
 import {renderSize} from './render-budget.js';
 import {BattleCamera} from './camera.js';
 import {createTutorial} from './tutorial.js';
@@ -22,6 +22,15 @@ for(const id of ['team-a-status','team-b-status','round','turn','countdown','tur
 const canvas=$('#battlefield'),ctx=canvas.getContext('2d',{alpha:false,desynchronized:true}),VIEW_WIDTH=1280,VIEW_HEIGHT=720,ZOOM=.88,VIEW_WORLD=VIEW_WIDTH/ZOOM;
 const glyphs={calibration:'●',armorPiercing:'◆',quake:'◒',drill:'▶',hive:'✦',meteor:'☢',pulse:'◎'};
 const escapeHtml=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+const mapOptions=`<option value="random">随机战场 · 六张地图轮换</option>${BIOME_IDS.map(id=>`<option value="${id}">${BIOMES[id].name}</option>`).join('')}`;
+for(const selector of ['#map-choice','#result-map-choice'])$(selector).innerHTML=mapOptions;
+function syncMapChoice(room){
+  const choice=BIOME_IDS.includes(room.mapChoice)?room.mapChoice:'random';
+  for(const selector of ['#map-choice','#result-map-choice']){$(selector).value=choice;$(selector).disabled=!room.isOwner;}
+  const description=choice==='random'?'每局从六张地图中随机抽取；试射场不参与决斗抽取。':BIOMES[choice].description;
+  $('#map-description').textContent=description;
+  $('#result-map-description').textContent=description;
+}
 let roomCode='',token='',snapshot=null,pollTimer=null,busy=false,renderScale=1,cameraX=0,cameraTarget=0,lastFrame=performance.now(),introStart=0,introSeed=null;
 const seenPickups=new Set(),seenFireContacts=new Set();
 let localHeading=45,localPower=68,selectedWeapon='calibration',shotQueue=[],shotAnimation=null,lastShotId=0;
@@ -61,6 +70,7 @@ function slotCard(seat,room){
 }
 function renderLobby(room){
   $('#room-code').textContent=room.code;$('#roster').innerHTML=room.seats.map(seat=>slotCard(seat,room)).join('');
+  syncMapChoice(room);
   $('#ready').textContent=room.selfReady?'取消准备':'准备';
   const enabled=room.seats.filter(seat=>seat.ai||!seat.id.startsWith('empty-'));
   const hasA=enabled.some(seat=>seat.team==='A'),hasB=enabled.some(seat=>seat.team==='B');
@@ -97,6 +107,7 @@ function render(data){
     calibrationScene=null;calibrationReplays.length=0;pendingDuelDialog=false;
   }
   $('#result-rematch').textContent=room.selfReady?'已确认再次决斗':'再次决斗';$('#result-rematch').disabled=room.selfReady;
+  if(room.status==='finished')syncMapChoice(room);
   $('#result-leave').textContent='退出';restartButton.hidden=!room.isOwner;
   restartButton.disabled=room.status!=='finished'||!room.roster.every(item=>item.ready);
   rematchStatus.textContent=room.roster.map(item=>`${item.name}：${item.ready?'已确认':'等待确认'}`).join(' · ');
@@ -210,6 +221,7 @@ async function roomCommand(operation,body={}){
 $('#create').onclick=()=>enterRoom(false);$('#join').onclick=()=>enterRoom(true);
 $('#ready').onclick=()=>roomCommand('ready',{ready:!snapshot.room.selfReady});
 $('#start').onclick=()=>roomCommand('start');
+for(const selector of ['#map-choice','#result-map-choice'])$(selector).onchange=event=>roomCommand('map',{mapChoice:event.target.value});
 async function leave(){await roomCommand('leave');}
 $('#leave').onclick=leave;$('#result-leave').onclick=leave;$('#result-rematch').onclick=()=>roomCommand('rematch');
 restartButton.onclick=()=>roomCommand('start');
