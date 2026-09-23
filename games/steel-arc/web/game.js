@@ -205,7 +205,7 @@ window.addEventListener('keydown',event=>{
   keys.add(code);updateUI();
 });
 window.addEventListener('keyup',event=>keys.delete(event.code));
-window.addEventListener('blur',()=>{keys.clear();if(mode==='playing')setMode('paused');});
+window.addEventListener('blur',()=>{keys.clear();if(mode==='playing'||mode==='practice')setMode('paused');});
 
 function spawnExplosion(explosion){
     renderer.setFrame({state,cameraX,projectiles,particles,shockwaves,damageLabels});
