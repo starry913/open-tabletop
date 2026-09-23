@@ -1,10 +1,12 @@
 ﻿import {
-  TEAM_TURN_ORDER,WEAPONS,createTeamMatch,finishTeamTurn,moveTank,resolveTeamShot,
-  selectWeapon,setAim,chooseTeamAiAction,isWeaponAvailable,AI_LEVELS,stepSupplyDrops,
+  TEAM_TURN_ORDER,WEAPONS,createTeamMatch,finishTeamTurn,moveTank,resolveTeamShot,advanceCalibrationTurn,
+  selectWeapon,setAim,chooseTeamAiAction,isWeaponAvailable,AI_LEVELS,stepSupplyDrops,resolveCalibrationShot,completeCalibration,
 } from '../web/engine.js';
 
+import {MAX_POWER} from '../web/aim-limits.js';
+import {BASE_MOVE_SPEED} from '../web/motion-config.js';
 export const ROOM_TTL=24*60*60*1000;
-export const TURN_MS=90000;
+export const TURN_MS=40000;
 const SLOTS=[...TEAM_TURN_ORDER];
 const active=room=>room.members.filter(member=>!member.left);
 const clone=structuredClone;
@@ -19,15 +21,16 @@ function roomCode(hash,attempt){const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';r
 function syncAi(room){const occupied=new Set(active(room).map(member=>member.slot));room.aiSlots=(room.aiSlots||[]).filter(slot=>!occupied.has(slot));if(room.engine)for(const slot of room.engine.turnOrder){const member=active(room).find(item=>item.slot===slot),ai=room.aiSlots.includes(slot);room.engine.tanks[slot].ai=ai;room.engine.tanks[slot].name=member?.name||`AI-${slot}`;}}
 function deadline(room,now){room.deadline=room.status==='playing'?now+TURN_MS:null;}
 function seatView(room,slot){const member=active(room).find(item=>item.slot===slot);if(member)return{id:member.id,name:member.name,team:slot[0],slot,ready:member.ready,owner:member.id===room.ownerId,ai:false};const ai=(room.aiSlots||[]).includes(slot);return{id:ai?`ai-${slot}`:`empty-${slot}`,name:ai?`AI-${slot}`:'空位',team:slot[0],slot,ready:ai,owner:false,ai,difficulty:room.aiDifficulties?.[slot]||'normal'};}
-function view(room,member,now){return{room:{schema:2,code:room.code,status:room.status,version:room.version,maxPlayers:room.maxPlayers,humanCount:active(room).length,aiCount:room.aiSlots.length,selfId:member.id,selfSlot:member.slot,isOwner:room.ownerId===member.id,selfReady:member.ready,serverNow:now,deadline:room.deadline,turnOrder:room.engine?[...room.engine.turnOrder]:SLOTS.filter(slot=>active(room).some(item=>item.slot===slot)||room.aiSlots.includes(slot)),roster:active(room).map(item=>({id:item.id,name:item.name,team:item.slot[0],slot:item.slot,ready:item.ready,owner:item.id===room.ownerId,ai:false})),seats:SLOTS.map(slot=>seatView(room,slot))},game:room.engine?clone(room.engine):null,log:[...room.log]};}
+function view(room,member,now){return{room:{schema:2,code:room.code,status:room.status,version:room.version,maxPlayers:room.maxPlayers,humanCount:active(room).length,aiCount:room.aiSlots.length,selfId:member.id,selfSlot:member.slot,isOwner:room.ownerId===member.id,selfReady:member.ready,selfSurrendered:Boolean(member.surrendered),serverNow:now,deadline:room.deadline,turnOrder:room.engine?[...room.engine.turnOrder]:SLOTS.filter(slot=>active(room).some(item=>item.slot===slot)||room.aiSlots.includes(slot)),roster:active(room).map(item=>({id:item.id,name:item.name,team:item.slot[0],slot:item.slot,ready:item.ready,surrendered:Boolean(item.surrendered),owner:item.id===room.ownerId,ai:false})),seats:SLOTS.map(slot=>seatView(room,slot))},game:room.engine?clone(room.engine):null,log:[...room.log]};}
 
 function nextAiTurn(room,now){
+  if(room.engine?.phase==='calibration')return nextCalibration(room,now);
   syncAi(room);let guard=0;
   while(room.status==='playing'&&room.aiSlots.includes(room.engine.turn)&&guard++<SLOTS.length){
     const slot=room.engine.turn,tank=room.engine.tanks[slot];
     const moveState=clone({...room.engine,shotHistory:[],lastShot:null,events:[]});
-    let plan=chooseTeamAiAction(room.engine,slot,random);
-    if(Math.abs(plan.move)>1){for(let left=plan.move,steps=0;Math.abs(left)>1&&steps++<400;){const moved=moveTank(room.engine,slot,Math.sign(left)*Math.min(Math.abs(left),74/60));if(!moved)break;left-=moved;}plan=chooseTeamAiAction(room.engine,slot,random);}
+    let plan=chooseWeakTeamAiAction(room.engine,slot);
+    if(Math.abs(plan.move)>1){for(let left=plan.move,steps=0;Math.abs(left)>1&&steps++<400;){const moved=moveTank(room.engine,slot,Math.sign(left)*Math.min(Math.abs(left),BASE_MOVE_SPEED/60));if(!moved)break;left-=moved;}plan=chooseWeakTeamAiAction(room.engine,slot);}
     if(isWeaponAvailable(tank,plan.weaponId,room.engine.round))selectWeapon(room.engine,slot,plan.weaponId);
     setAim(room.engine,slot,{heading:plan.heading,power:plan.power});
     const shot=resolveTeamShot(room.engine,slot);
@@ -37,11 +40,31 @@ function nextAiTurn(room,now){
   }
   deadline(room,now);
 }
+// Aim at the enemy, then introduce symmetric aiming errors. Never reject a
+// shot because it would hit, and never intentionally fire away from the enemy.
+export function chooseWeakTeamAiAction(state,tankId,rng=Math.random){
+  const tank=state.tanks[tankId];
+  const simulation={...state,tanks:{...state.tanks,[tankId]:{...tank,difficulty:'hard',unlockedTiers:[1],ammo:{}}}};
+  const plan=chooseTeamAiAction(simulation,tankId,()=>.5);
+  const angle=Math.max(10,Math.min(85,plan.angle+(rng()-.5)*24));
+  const power=Math.max(20,Math.min(MAX_POWER,plan.power+(rng()-.5)*32));
+  return {move:0,heading:plan.heading<=90?angle:180-angle,power,weaponId:'calibration'};
+}
+function nextCalibration(room,now){
+  syncAi(room);
+  let guard=0;while(room.engine.calibration.turn&&room.aiSlots.includes(room.engine.calibration.turn)&&guard++<SLOTS.length){const slot=room.engine.calibration.turn;const plan=chooseTeamAiAction(room.engine,slot,random);resolveCalibrationShot(room.engine,slot,{heading:plan.heading,power:plan.power});advanceCalibrationTurn(room.engine);}
+  if(completeCalibration(room.engine)!==null)room.log.push(`校准完成，${room.engine.calibration.winner==='draw'?'平局，A 队先手':`${room.engine.calibration.winner} 队取得先手`}`);
+  deadline(room,now);
+}
 
 function advanceExpiredTurn(room,now){
   if(room.status!=='playing'||!room.deadline||now<room.deadline)return false;
+  if(room.engine.phase==='calibration'){
+    let guard=0;while(room.engine.calibration.turn&&guard++<SLOTS.length){const slot=room.engine.calibration.turn;const plan=chooseTeamAiAction(room.engine,slot,random);resolveCalibrationShot(room.engine,slot,{heading:plan.heading,power:plan.power});advanceCalibrationTurn(room.engine);}
+    completeCalibration(room.engine);deadline(room,now);room.version++;return true;
+  }
   const tank=room.engine.tanks[room.engine.turn];room.log.push(`${tank.name} 行动超时，由 AI 代打`);
-  const plan=chooseTeamAiAction(room.engine,tank.id,random);selectWeapon(room.engine,tank.id,plan.weaponId);setAim(room.engine,tank.id,{heading:plan.heading,power:plan.power});resolveTeamShot(room.engine,tank.id);
+  const plan=chooseWeakTeamAiAction(room.engine,tank.id);selectWeapon(room.engine,tank.id,plan.weaponId);setAim(room.engine,tank.id,{heading:plan.heading,power:plan.power});resolveTeamShot(room.engine,tank.id);
   if(room.engine.phase==='ended'){room.status='finished';room.members.forEach(item=>item.ready=false);}else nextAiTurn(room,now);
   room.version++;return true;
 }
@@ -107,20 +130,43 @@ export class SteelArcRoomService{
           if(member.slot!==wanted){member.slot=wanted;member.ready=member.id===room.ownerId;room.version++;changed=true;syncAi(room);}
         }else if(operation==='ai'){check(room.status==='waiting',409,'只能在等待阶段设置 AI。');check(member.id===room.ownerId,403,'只有房主可以设置 AI。');const wanted=typeof input.slot==='string'?input.slot:'';check(SLOTS.includes(wanted),400,'请选择有效位置。');check(!active(room).some(item=>item.slot===wanted),409,'该位置已被占用。');check(input.difficulty===undefined||Object.hasOwn(AI_LEVELS,input.difficulty),400,'AI 难度无效。');room.aiDifficulties??={};room.aiDifficulties[wanted]=input.difficulty||room.aiDifficulties[wanted]||'normal';const enabled=input.enabled!==false;room.aiSlots=room.aiSlots||[];room.aiSlots=enabled?[...new Set([...room.aiSlots,wanted])]:room.aiSlots.filter(slot=>slot!==wanted);room.version++;changed=true;syncAi(room);}else if(operation==='ready'){
           check(room.status==='waiting',409,'只能在等待阶段准备。');check(typeof input.ready==='boolean',400,'准备状态无效。');member.ready=input.ready;room.version++;changed=true;
+        }else if(operation==='rematch'){
+          check(room.status==='finished',409,'本局尚未结束。');
+          member.ready=true;
+          room.version++;changed=true;
+        }else if(operation==='surrender'){
+          check(room.status==='playing',409,'本局已经结束。');
+          member.surrendered=true;
+          const teammates=active(room).filter(item=>item.slot[0]===member.slot[0]);
+          room.log.push(`${member.name} 确认投降（${teammates.filter(item=>item.surrendered).length}/${teammates.length}）`);
+          if(teammates.every(item=>item.surrendered)){
+            room.engine.phase='ended';room.engine.winner=member.slot[0]==='A'?'B':'A';room.status='finished';room.deadline=null;
+            room.members.forEach(item=>item.ready=false);
+          }
+          room.version++;changed=true;
         }else if(operation==='start'){
-          check(member.id===room.ownerId,403,'只有房主可以开始。');check(room.status==='waiting',409,'本局已经开始。');
+          check(member.id===room.ownerId,403,'只有房主可以开始。');check(['waiting','finished'].includes(room.status),409,'本局已经开始。');
           check(active(room).every(item=>item.ready),409,'所有真人玩家必须准备');
           syncAi(room);const selected=new Set([...active(room).map(item=>item.slot),...room.aiSlots]);check(selected.size>=2,409,'至少需要启用 2 个行动位');check([...selected].some(slot=>slot[0]==='A')&&[...selected].some(slot=>slot[0]==='B'),409,'双方都需要至少一个行动位');const roster=Object.fromEntries(SLOTS.map(slot=>{const human=active(room).find(item=>item.slot===slot),ai=room.aiSlots.includes(slot);return[slot,{name:human?.name||`AI-${slot}`,ai,difficulty:room.aiDifficulties?.[slot]||'normal',active:Boolean(human||ai)}];}));
-          room.engine=createTeamMatch({seed:(now^Math.floor(random()*0xffffffff))>>>0,roster});room.status='playing';room.log=['战场已部署。'];room.members.forEach(item=>item.ready=false);room.version++;nextAiTurn(room,now);changed=true;
+          room.engine=createTeamMatch({seed:(now^Math.floor(random()*0xffffffff))>>>0,roster,previousRangeDistance:room.engine?.calibration?.distance,previousBattleWidth:(room.engine?.battleTerrain||room.engine?.terrain)?.width});room.status='playing';room.log=['战场已部署，请按顺序完成地面靶校准。'];room.members.forEach(item=>{item.ready=false;item.surrendered=false;item.processed=[];});room.version++;nextAiTurn(room,now);changed=true;
         }else if(operation==='action'){
           check(typeof input.requestId==='string'&&/^[a-zA-Z0-9_-]{8,80}$/.test(input.requestId),400,'行动编号无效。');
           if(member.processed.includes(input.requestId))return view(room,member,now);
-          check(input.version===room.version,409,'战局已更新，请重试。');check(room.status==='playing'&&room.engine.phase==='aim',409,'当前不能行动。');check(room.engine.turn===member.slot,409,'还没有轮到你。');
+          check(input.version===room.version,409,'战局已更新，请重试。');check(room.status==='playing',409,'当前不能行动。');
+          if(room.engine.phase==='calibration'){
+            check(!room.engine.calibration.shots[member.slot],409,'你已经完成校准。');check(input.type==='calibration',400,'校准阶段请提交校准射击。');check(Number.isFinite(input.heading)&&Number.isFinite(input.power),400,'瞄准参数无效。');
+            check(room.engine.calibration.turn===member.slot,409,'还没有轮到你进行校准射击。');resolveCalibrationShot(room.engine,member.slot,{heading:input.heading,power:input.power});advanceCalibrationTurn(room.engine);completeCalibration(room.engine);member.processed.push(input.requestId);member.processed=member.processed.slice(-64);member.lastSeen=now;room.version++;changed=true;deadline(room,now);
+            room.expiresAt=now+ROOM_TTL;if(!await this.store.cas(code,stored.revision,room,room.expiresAt))continue;
+            return view(room,member,now);
+          }
+          check(room.engine.phase==='aim',409,'当前不能行动。');check(room.engine.turn===member.slot,409,'还没有轮到你。');
           const tank=room.engine.tanks[member.slot];
           if(input.type==='move'){
             const steps=input.steps??[input.distance];
-            check(Array.isArray(steps)&&steps.length>0&&steps.length<=120&&steps.every(value=>Number.isFinite(value)&&value!==0)&&steps.reduce((sum,value)=>sum+Math.abs(value),0)<=28,400,'移动距离无效。');
+            check(Array.isArray(steps)&&steps.length>0&&steps.length<=120&&steps.every(value=>Number.isFinite(value))&&steps.reduce((sum,value)=>sum+Math.abs(value),0)<=28,400,'移动距离无效。');
             for(const distance of steps)moveTank(room.engine,member.slot,distance);
+            if(room.engine.phase==='ended'){room.status='finished';room.members.forEach(item=>item.ready=false);deadline(room,now);}
+            else if(room.engine.turn!==member.slot)nextAiTurn(room,now);
           }else if(input.type==='aim'){
             check(Number.isFinite(input.heading)&&Number.isFinite(input.power),400,'瞄准参数无效。');setAim(room.engine,member.slot,{heading:input.heading,power:input.power});
           }else if(input.type==='select'){
@@ -138,7 +184,9 @@ export class SteelArcRoomService{
           member.left=true;member.ready=false;if(room.ownerId===member.id)room.ownerId=active(room)[0]?.id??null;
           if(room.status==='playing')room.aiSlots.push(member.slot);
           syncAi(room);
-          if(room.status==='playing'&&room.engine.turn===member.slot)nextAiTurn(room,now);room.version++;changed=true;
+          if(room.status==='playing'&&room.engine.turn===member.slot)nextAiTurn(room,now);
+          if(room.status==='playing'&&room.engine.phase!=='calibration'&&room.engine.turn===member.slot){const replacement=room.engine.turnOrder.find(slot=>slot!==member.slot&&room.engine.tanks[slot]?.hp>0);if(replacement){room.engine.turn=replacement;room.engine.turnIndex=room.engine.turnOrder.indexOf(replacement);}}
+          room.version++;changed=true;
         }else check(operation==='state',404,'error');
       }
       if(changed){room.expiresAt=now+ROOM_TTL;if(!await this.store.cas(code,stored.revision,room,room.expiresAt))continue;}

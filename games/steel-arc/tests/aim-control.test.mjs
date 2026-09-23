@@ -7,7 +7,7 @@ test('aim disk keeps a calm center and gives more low-power precision',()=>{
   assert.equal(center.heading,45);assert.ok(center.power<68&&center.power>20);
   const quarter=mapAimPointer(-20,20,80,{heading:45,power:40});
   const half=mapAimPointer(-40,40,80,{heading:45,power:40});
-  assert.ok(quarter.power<half.power);assert.ok(half.power<100);
+  assert.ok(quarter.power<half.power);assert.ok(half.power<200);
 });
 
 test('holding shift makes angle and power changes finer',()=>{

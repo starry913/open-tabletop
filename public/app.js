@@ -61,7 +61,7 @@ const aeroplaneArt = (index, category) => `
 
 const steelArcArt = (index, category) => `
   <div class="game-art steel-arc-art" aria-hidden="true">
-    <img src="/games/steel-arc/assets/steel-expedition-cover-v1.png" alt="" width="1672" height="941" loading="lazy">
+    <img src="/games/steel-arc/assets/steel-expedition-cover-v2.png" alt="" width="2172" height="724" loading="lazy">
     <span class="art-index">${String(index + 1).padStart(2, '0')} / ${escape(category)}</span>
   </div>`;
 

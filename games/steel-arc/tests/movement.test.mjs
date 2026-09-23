@@ -1,3 +1,4 @@
+import {enterDuelFixture} from './room-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createTeamMatch,moveTank} from '../web/engine.js';
@@ -5,13 +6,14 @@ import {stepTankControls,CONTROL_CONFIG} from '../web/controls.js';
 import {PredictedMovement} from '../web/movement.js';
 import {MemorySteelArcRoomStore,SteelArcRoomService} from '../server/rooms.mjs';
 test('shared controls move at solo speed, independent of key repeat',()=>{
-  const state=createTeamMatch({seed:1});state.terrain.points.fill(500);
+  assert.equal(CONTROL_CONFIG.moveSpeed,111);
+  const state=createTeamMatch({seed:1});state.terrain.points.fill(500);state.terrain.themeId='classic';state.phase='aim';
   const x=state.tanks.A1.x;
   for(let i=0;i<60;i++)stepTankControls(state,'A1',new Set(['KeyD']),1/60);
   assert.ok(Math.abs(state.tanks.A1.x-x-CONTROL_CONFIG.moveSpeed)<1e-8);
 });
 test('delayed movement acknowledgement preserves later inputs without a position snap',()=>{
-  const server=createTeamMatch({seed:1});server.terrain.points.fill(500);
+  const server=createTeamMatch({seed:1});server.terrain.points.fill(500);server.phase='aim';
   const prediction=new PredictedMovement();prediction.accept(server,'A1');
   for(let i=0;i<6;i++)prediction.record(stepTankControls(prediction.state,'A1',new Set(['KeyD']),1/60).steps);
   const batch=prediction.batch();
@@ -24,11 +26,21 @@ test('delayed movement acknowledgement preserves later inputs without a position
   server.turn='B1';server.completedTurns++;
   prediction.accept(server,'A1');assert.equal(prediction.pending.length,0);
 });
+
+test('mirrored B controls keep A left, D right and W increasing screen elevation',()=>{
+  for(const [key,sign] of [['KeyA',1],['KeyD',-1]]){
+    const state=createTeamMatch({seed:1});state.terrain.points.fill(500);state.terrain.calibrationSurface=true;state.phase='aim';state.turn='B1';
+    const tank=state.tanks.B1;tank.x=1500;const before=tank.x,heading=tank.heading;
+    const result=stepTankControls(state,'B1',new Set([key,'KeyW']),1/60,{mirrored:true});
+    assert.equal(Math.sign(tank.x-before),sign);assert.equal(Math.sign(result.steps[0]),sign);
+    assert.ok(tank.heading<heading);
+  }
+});
 test('server replays frame steps exactly and rejects over-limit batches without moving',async()=>{
   const service=new SteelArcRoomService(new MemorySteelArcRoomStore());
   const owner=await service.create({name:'Host'}),code=owner.room.code;
   await service.request(code,owner.token,'ai',{slot:'B1',enabled:true});
-  const started=await service.request(code,owner.token,'start');
+  await service.request(code,owner.token,'start');const started=await enterDuelFixture(service,code,owner.token);
   const expected=structuredClone(started.game),steps=[1.1,1.2,1.3,-1.1,-1.2];
   for(const distance of steps)moveTank(expected,'A1',distance);
   const result=await service.request(code,owner.token,'action',{type:'move',steps,version:started.room.version,requestId:'movement001'});

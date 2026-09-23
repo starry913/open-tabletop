@@ -17,8 +17,8 @@ try{
   await page.addInitScript(()=>{
     window.musicElements=[];const OriginalAudio=window.Audio;
     window.Audio=class extends OriginalAudio{constructor(...args){super(...args);window.musicElements.push(this);}};
-    window.sampleStarts=0;const create=AudioContext.prototype.createBufferSource;
-    AudioContext.prototype.createBufferSource=function(){const source=create.call(this),start=source.start;source.start=function(...args){window.sampleStarts++;return start.apply(this,args);};return source;};
+    window.sampleStarts=0;window.environmentLoops=new Set();const create=AudioContext.prototype.createBufferSource;
+    AudioContext.prototype.createBufferSource=function(){const source=create.call(this),start=source.start,stop=source.stop;source.start=function(...args){if(source.loop)window.environmentLoops.add(source);else window.sampleStarts++;return start.apply(this,args);};source.stop=function(...args){window.environmentLoops.delete(source);return stop.apply(this,args);};return source;};
   });
   await page.goto(base+'/games/steel-arc/index.html');
   await page.locator('[data-action="start"]').click();
@@ -41,9 +41,12 @@ try{
     for(const weapon of Object.keys(WEAPON_AUDIO)){audio.fire(weapon);audio.explode(weapon);await new Promise(resolve=>setTimeout(resolve,50));}
   });
   assert.equal(await page.evaluate(()=>window.sampleStarts),14);
+  for(const theme of ['bay','alpine','canyon','river','ice','falls']){assert.equal(await page.evaluate(async id=>{const {audio}=await import('/games/steel-arc/audio.js');audio.setEnvironment(id);return window.environmentLoops.size;},theme),1);}
   assert.equal(await page.evaluate(async()=>{const {audio}=await import('/games/steel-arc/audio.js');audio.toggle();return window.musicElements[0].paused;}),true);
+  assert.equal(await page.evaluate(()=>window.environmentLoops.size),0);
   await page.evaluate(async()=>{const {audio}=await import('/games/steel-arc/audio.js');audio.toggle();});
   await page.waitForFunction(()=>!window.musicElements[0].paused);
   assert.equal(await page.evaluate(async()=>{const {audio}=await import('/games/steel-arc/audio.js');audio.setBattle(false);return window.musicElements[0].paused;}),true);
+  assert.equal(await page.evaluate(()=>window.environmentLoops.size),0);
   assert.deepEqual(errors,[]);console.log(JSON.stringify({decoded,sampleStarts:14,muteAndStop:'passed'},null,2));
 }finally{await browser?.close();await app.close();}

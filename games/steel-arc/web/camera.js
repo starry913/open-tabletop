@@ -31,16 +31,18 @@ export class BattleCamera{
         if(!this.aim){
           const enemies=Object.values(state.tanks).filter(t=>t.hp>0&&t.id!==actor.id&&(!actor.team||t.team!==actor.team));
           const target=enemies.sort((a,b)=>Math.abs(a.x-actor.x)-Math.abs(b.x-actor.x))[0]||actor;
+          const framedX=state.terrain.rangeTarget?target.x+state.terrain.rangeTarget.radius+50:target.x;
           // Reserve horizontal room for the aim control and vertical room for the HUD.
-          zoom=Math.min(.88,820/(Math.abs(actor.x-target.x)+120));
-          zoom=Math.max(.32,zoom);x=(actor.x+target.x)/2-735/zoom;
+          zoom=Math.min(.88,1100/(Math.abs(actor.x-framedX)+120));
+          zoom=Math.max(.24,zoom);x=(actor.x+framedX)/2-640/zoom;
           y=(actor.y+target.y)/2-425/zoom;
           this.aim={zoom,x,y};
         }
         ({zoom,x,y}=this.aim);
       }
     }
-    x=clamp(x,-120/zoom,Math.max(-120/zoom,WORLD_WIDTH-1160/zoom));
+    const margin=this.aim?80:120;
+    x=clamp(x,-margin/zoom,Math.max(-margin/zoom,state.terrain.width-1160/zoom));
     const blend=1-Math.exp(-dt*(flying.length?7:4));
     this.zoom+=(zoom-this.zoom)*blend;this.x+=(x-this.x)*blend;this.y+=(y-this.y)*blend;
     return this;
