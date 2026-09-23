@@ -4,7 +4,7 @@
 } from '../web/engine.js';
 
 import {MAX_POWER} from '../web/aim-limits.js';
-import {BASE_MOVE_SPEED} from '../web/motion-config.js';
+import {BASE_MOVE_SPEED,MAX_FIRE_MOVE_STEPS,MAX_FIRE_MOVE_DISTANCE} from '../web/motion-config.js';
 export const ROOM_TTL=24*60*60*1000;
 export const TURN_MS=40000;
 const SLOTS=[...TEAM_TURN_ORDER];
@@ -172,6 +172,11 @@ export class SteelArcRoomService{
           }else if(input.type==='select'){
             check(typeof input.weaponId==='string',400,'弹药类型无效。');check(selectWeapon(room.engine,member.slot,input.weaponId),409,'弹药尚未解锁或已用完。');
           }else if(input.type==='fire'){
+            if(input.steps!==undefined){
+              check(Array.isArray(input.steps)&&input.steps.length<=MAX_FIRE_MOVE_STEPS&&input.steps.every(Number.isFinite)&&input.steps.reduce((sum,value)=>sum+Math.abs(value),0)<=MAX_FIRE_MOVE_DISTANCE,400,'开火前移动距离无效。');
+              for(const distance of input.steps)moveTank(room.engine,member.slot,distance);
+              check(room.engine.phase==='aim'&&room.engine.turn===member.slot,409,'移动后已无法开火。');
+            }
             if(typeof input.weaponId==='string')check(selectWeapon(room.engine,member.slot,input.weaponId),409,'弹药尚未解锁或已用完。');
             check(setAim(room.engine,member.slot,{heading:Number(input.heading),power:Number(input.power)}),400,'瞄准参数无效。');
             check(resolveTeamShot(room.engine,member.slot),409,'当前无法开火。');

@@ -4,12 +4,13 @@ import {biomeFor,materialAt} from './biomes.js';
 import {renderSize} from './render-budget.js';
 import {BattleCamera} from './camera.js';
 import {createTutorial} from './tutorial.js';
-import {AI_LEVELS,stepSupplyDrops,hasFallingSupply,moveTank,applyRecoil} from './engine.js';
+import {AI_LEVELS,stepSupplyDrops,hasFallingSupply,moveTank,applyRecoil,resolveCalibrationShot} from './engine.js';
 import {stepProjectile,splitHiveProjectile,resolveExplosion,resolveDirectHit,settleSupplies} from './engine.js';
 import {audio} from './audio.js';
 import {createBattleRenderer} from './renderer.js';
 import {stepTankControls} from './controls.js';
 import {PredictedMovement} from './movement.js';
+import {MAX_FIRE_MOVE_STEPS,MAX_FIRE_MOVE_DISTANCE} from './motion-config.js';
 import {mapAimPointer} from './aim-control.js';
 import {screenHeading} from './aim-angle.js';
 import {createFineAimControls} from './aim-fine-controls.js';
@@ -24,6 +25,7 @@ const escapeHtml=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<'
 let roomCode='',token='',snapshot=null,pollTimer=null,busy=false,renderScale=1,cameraX=0,cameraTarget=0,lastFrame=performance.now(),introStart=0,introSeed=null;
 const seenPickups=new Set(),seenFireContacts=new Set();
 let localHeading=45,localPower=68,selectedWeapon='calibration',shotQueue=[],shotAnimation=null,lastShotId=0;
+let optimisticShot=null;
 const calibrationReplays=[],seenCalibrationShots=new Set();let pendingDuelDialog=false,calibrationResultAt=0,scoreRevealTimer=0;
 let modeDialogOpen=false,lastModePhase=null,calibrationScene=null;
 const modeDialog=document.createElement('div');modeDialog.id='mode-dialog';modeDialog.hidden=true;modeDialog.innerHTML='<span>多人流程</span><strong id="mode-title"></strong><p id="mode-copy"></p><button id="mode-confirm" type="button">开始</button>';Object.assign(modeDialog.style,{position:'fixed',inset:'0',zIndex:30,display:'grid',placeContent:'center',justifyItems:'center',gap:'10px',background:'#061722cc',backdropFilter:'blur(6px)',color:'#fff0bd',textAlign:'center',fontFamily:'Bahnschrift,sans-serif'});document.body.append(modeDialog);
@@ -69,7 +71,7 @@ function renderLobby(room){
 function healthCard(tank){return `<article class="tank-stat ${tank.hp<=0?'dead':''}"><header><b>${tank.id}</b><span>${escapeHtml(tank.name)} · ${Math.ceil(tank.hp)}</span></header><div class="hp"><i style="width:${tank.hp}%"></i></div></article>`;}
 function queueShots(game){
   const history=game.shotHistory||game.lastShot?[...(game.shotHistory||[]),...(!game.shotHistory?.length&&game.lastShot?[game.lastShot]:[])]:[];
-  for(const shot of history)if(shot.id>lastShotId){shotQueue.push(shot);lastShotId=Math.max(lastShotId,shot.id);}
+  for(const shot of history)if(shot.id>lastShotId){if(optimisticShot?.seed===game.seed&&optimisticShot.id===shot.id&&optimisticShot.owner===shot.owner)optimisticShot=null;else shotQueue.push(shot);lastShotId=Math.max(lastShotId,shot.id);}
 }
 function renderBattle(room,game){
   queueShots(game);const authoritativeGame=game;game=shotAnimation?.state||game;
@@ -99,7 +101,7 @@ function render(data){
   restartButton.disabled=room.status!=='finished'||!room.roster.every(item=>item.ready);
   rematchStatus.textContent=room.roster.map(item=>`${item.name}：${item.ready?'已确认':'等待确认'}`).join(' · ');
   if(data.game&&introSeed!==data.game.seed){
-    seenFireContacts.clear();seenCalibrationShots.clear();calibrationReplays.length=0;calibrationScene=null;
+    seenFireContacts.clear();seenCalibrationShots.clear();calibrationReplays.length=0;calibrationScene=null;optimisticShot=null;
     pendingDuelDialog=false;calibrationResultAt=0;lastModePhase=null;
     clearInterval(scoreRevealTimer);remotePositions.clear();
   }
@@ -121,8 +123,41 @@ async function refresh(){if(!roomCode||busy||polling||moveRequest)return;const c
 function beginPolling(){clearTimeout(pollTimer);if(roomCode)pollTimer=setTimeout(async()=>{await refresh();beginPolling();},snapshot?.room.status==='playing'?100:1000);}
 async function action(payload){
   if(busy||!snapshot)return;busy=true;
-  try{await flushMovement();render(await api(`/rooms/${roomCode}/action`,'POST',{...payload,version:snapshot.room.version,requestId:requestId()}));}
-  catch(error){handleFailure(error);}finally{busy=false;}
+  let provisional=null,failed=false;
+  try{
+    provisional=previewShot(payload);
+    if(payload.type==='fire'){
+      if(moveRequest)await moveRequest;
+      const steps=movement.pending.map(input=>input.distance),distance=steps.reduce((sum,value)=>sum+Math.abs(value),0);
+      if(steps.length>MAX_FIRE_MOVE_STEPS||distance>MAX_FIRE_MOVE_DISTANCE)await flushMovement();
+      else payload={...payload,steps};
+    }else await flushMovement();
+    render(await api(`/rooms/${roomCode}/action`,'POST',{...payload,version:snapshot.room.version,requestId:requestId()}));
+  }catch(error){
+    failed=true;
+    if(provisional?.type==='fire'&&shotAnimation?.optimistic)shotAnimation=null;
+    if(provisional?.type==='calibration'){seenCalibrationShots.delete(provisional.tankId);const index=calibrationReplays.findIndex(replay=>replay===provisional.replay);if(index>=0)calibrationReplays.splice(index,1);}
+    optimisticShot=null;handleFailure(error);
+  }finally{busy=false;if(failed&&roomCode)void refresh();}
+}
+
+function previewShot(payload){
+  const id=snapshot?.room.selfSlot;if(!id||!snapshot?.game)return null;
+  if(payload.type==='calibration'){
+    const state=structuredClone(snapshot.game),shot=resolveCalibrationShot(state,id,payload);
+    if(!shot)return null;
+    const replay={shot,at:performance.now(),duration:Math.max(1.2,(shot.points?.length||1)/120),impactShown:false};
+    calibrationReplays.push(replay);seenCalibrationShots.add(id);audio.fire('calibration');
+    return {type:'calibration',tankId:id,replay};
+  }
+  if(payload.type!=='fire')return null;
+  const state=structuredClone(movement.state||snapshot.game),tank=state.tanks[id];if(!tank)return null;
+  tank.heading=payload.heading;tank.power=payload.power;tank.weapon=payload.weaponId;
+  const nextId=state.volleySerial+1;state.volleySerial=nextId;state.phase='flight';
+  const projectile={...createProjectile(state,id),trail:[]};
+  shotAnimation={state,projectiles:[projectile],accumulator:0,settle:0,postSupplies:structuredClone(state.supplies||[]),dropping:false,aimDelay:0,launched:false,pendingProjectiles:[projectile],optimistic:true};
+  shotAnimation.projectiles=[];optimisticShot={seed:state.seed,id:nextId,owner:id};
+  return {type:'fire'};
 }
 
 function sendMovement(){
