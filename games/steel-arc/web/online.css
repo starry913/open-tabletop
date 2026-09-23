@@ -23,6 +23,13 @@ body:has(#battle:not([hidden])) .masthead{display:none}
 body:has(#battle:not([hidden])) .battle-stage{width:min(100vw,calc(100vh * 16 / 9));height:min(100vh,calc(100vw * 9 / 16));min-width:0;margin:0;transform:none;isolation:isolate}
 @media(max-width:500px){.roster{gap:10px}.member{padding:10px}.room-code{margin:16px 0}.lobby-actions{flex-wrap:wrap}.entry-stage,.lobby-stage{min-height:0}.masthead .brand small{font-size:7px;letter-spacing:1px}.room-brief h1{margin:8px 0}}
 
-.ai-level{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:8px}
+.result-actions{display:flex;gap:10px}.result-actions button{min-width:120px}.ai-level{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:8px}
 .ai-level select{font:inherit;color:#eff8ee;background:#12394b;border:1px solid #7697a0;border-radius:4px;padding:5px 10px;cursor:pointer}
 .aim-panel>.fine-aim-controls{position:absolute;z-index:8;left:50%;top:4px;display:flex;justify-content:center;gap:8px;width:68px;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;transform:translateX(-50%);pointer-events:auto}.aim-readout{top:22px}.fine-step{display:flex;gap:2px}.fine-step button{width:14px;height:14px;padding:0;border:1px solid #ffffff46;border-radius:5px;background:#ffffff18;color:#ffffffe0;font:700 9px/12px Consolas,sans-serif;box-shadow:0 2px 6px #06111b35;cursor:pointer}.fine-step button:hover{background:#ffffff30;border-color:#ffffff80}.fine-step button:active{background:#ffffff45;transform:translateY(1px)}.fine-step button:disabled{opacity:.25;cursor:default}
+/* Keep translucent controls without re-blurring the live canvas each frame. */
+.aim-panel .aim-control,.practice-map-switch{backdrop-filter:none}
+.exit-menu{max-width:420px;padding:26px;border:1px solid #80b6bf;border-radius:12px;background:#102f45;color:#ffe8af;box-shadow:0 16px 60px #0008}
+.exit-menu::backdrop{background:#071722b8}.exit-menu p{line-height:1.7;color:#bad4db}.exit-menu>div{display:flex;gap:12px}.exit-menu button{padding:10px 16px}#rematch-status{max-width:620px;font-size:14px;line-height:1.8;color:#b8d5df}
+.calibrating .weapon-rack{display:flex;align-items:center;gap:24px}.calibrating .weapon-rack .weapon{width:105px;flex:none}.calibrating .weapon-rack::after{content:'落点越接近信号烟，得分越高';color:#bdd6d9;font-size:13px}.calibrating .battle-log{opacity:.65}
+body:not(:has(#battle:not([hidden]))){background:linear-gradient(90deg,#06172275 0%,#06172230 42%,#06172254 100%),linear-gradient(180deg,#0617221f 0%,#0617223d 55%,#061722a8 100%),url('./assets/steel-expedition-friend-room-bg-v1.png') center center / cover fixed no-repeat #071722}
+.entry-copy h1{line-height:1.16}

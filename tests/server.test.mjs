@@ -93,10 +93,11 @@ test('real HTTP steel expedition room keeps four slots, AI fill and restart pers
  const {data:guest}=await call(app,path+'/join',{body:{name:'B队员',seatKey}});assert.equal(guest.room.selfSlot,'B1');
  await call(app,path+'/ready',{token:guest.token,body:{ready:true}});
  const {data:started}=await call(app,path+'/start',{token:host.token,body:{}});assert.deepEqual(started.game.turnOrder,['A1','B1']);assert.equal(started.room.aiCount,0);
- const {data:fired}=await call(app,path+'/action',{token:host.token,body:{type:'fire',heading:45,power:62,version:started.room.version,requestId:'steel-fire-001'}});assert.equal(fired.game.turn,'B1');assert.ok(fired.game.shotHistory[0].points.length>3);
+ assert.equal(started.game.phase,'calibration');
+ const {data:fired}=await call(app,path+'/action',{token:host.token,body:{type:'calibration',heading:45,power:62,version:started.room.version,requestId:'steel-calibration-001'}});assert.equal(fired.game.calibration.turn,'B1');assert.ok(fired.game.calibration.shots.A1.points.length>3);
  const persisted=JSON.parse(await readFile(join(dataDir,'steel-arc-rooms.json'),'utf8'));assert.equal(persisted.length,1);
  await app.close();app=await start(dataDir);
- const {data:restored}=await call(app,path,{token:host.token});assert.equal(restored.room.code,host.room.code);assert.equal(restored.game.turn,'B1');assert.equal(restored.game.shotHistory.length,1);
+ const {data:restored}=await call(app,path,{token:host.token});assert.equal(restored.room.code,host.room.code);assert.equal(restored.game.calibration.turn,'B1');assert.equal(restored.game.calibration.shots.A1.points.length,fired.game.calibration.shots.A1.points.length);
 });
 
 test('explicit public origin supports HTTPS reverse proxies and rejects unrelated origins',async t=>{

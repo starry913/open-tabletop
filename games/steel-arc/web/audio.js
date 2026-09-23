@@ -1,4 +1,6 @@
+import {BIOMES} from './biomes.js';
 import {BACKGROUND_TRACK,WEAPON_AUDIO} from './audio-assets.js';
+let environmentId=null,playingEnvironment=null,ambience=[];
 let context=null,master=null,muted=false,battleActive=false,unlocked=false;
 try{muted=localStorage.getItem('steelArcMuted')==='1';}catch{}
 const buffers=new Map(),voices=new Set();
@@ -8,7 +10,18 @@ function ensure(){
   if(!context){context=new (window.AudioContext||window.webkitAudioContext)();master=context.createGain();master.gain.value=muted?0:1;master.connect(context.destination);}
   return context;
 }
+function stopAmbience(){playingEnvironment=null;for(const node of ambience){try{node.stop?.();node.disconnect();}catch{}}ambience=[];}
+function syncAmbience(){
+  if(playingEnvironment===environmentId&&ambience.length&&unlocked&&battleActive&&!muted&&!document.hidden)return;
+  stopAmbience();if(!unlocked||!battleActive||muted||document.hidden||!BIOMES[environmentId])return;
+  playingEnvironment=environmentId;
+  const ctx=ensure(),kind=BIOMES[environmentId].ambient,spec={surf:[420,.045,.11],snow:[950,.018,.07],falls:[1600,.043,.19],river:[2300,.028,.27],ice:[560,.017,.05],mist:[1150,.034,.13]}[kind];
+  const buffer=ctx.createBuffer(1,ctx.sampleRate*4,ctx.sampleRate),data=buffer.getChannelData(0);let previous=0;
+  for(let i=0;i<data.length;i++){previous=(previous+(Math.random()*2-1)*.045)/1.045;data[i]=previous*5;}
+  const source=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),gain=ctx.createGain(),lfo=ctx.createOscillator(),depth=ctx.createGain();source.buffer=buffer;source.loop=true;filter.type='lowpass';filter.frequency.value=spec[0];gain.gain.value=spec[1];lfo.frequency.value=spec[2];depth.gain.value=spec[1]*.35;lfo.connect(depth).connect(gain.gain);source.connect(filter).connect(gain).connect(master);source.start();lfo.start();ambience=[source,filter,gain,lfo,depth];
+}
 function syncMusic(){
+  syncAmbience();
   if(unlocked&&battleActive&&!muted&&!document.hidden)music.play().catch(()=>{});else music.pause();
 }
 function load(file){
@@ -22,7 +35,7 @@ async function unlock(){
 window.addEventListener('pointerdown',unlock,{passive:true});
 window.addEventListener('keydown',unlock);
 document.addEventListener('visibilitychange',()=>{syncMusic();if(document.hidden)stopEffects();});
-window.addEventListener('pagehide',()=>{music.pause();stopEffects();});
+window.addEventListener('pagehide',()=>{music.pause();stopEffects();stopAmbience();});
 function stopEffects(){for(const voice of voices)try{voice.stop();}catch{}voices.clear();}
 async function sample(weapon,impact=false){
   if(muted||document.hidden||!unlocked)return;
@@ -42,14 +55,15 @@ function tone({frequency=220,end=80,duration=.15,type='square',gain=.08,delay=0}
   osc.connect(amp).connect(master);voices.add(osc);osc.onended=()=>{voices.delete(osc);osc.disconnect();amp.disconnect();};osc.start(start);osc.stop(start+duration+.02);
 }
 export const audio={
+  setEnvironment(id){if(environmentId===id)return;environmentId=id;syncAmbience();},
   get muted(){return muted;},
   setBattle(active){battleActive=active;if(!active){stopEffects();music.currentTime=0;}syncMusic();},
   toggle(){muted=!muted;try{localStorage.setItem('steelArcMuted',muted?'1':'0');}catch{}if(master)master.gain.value=muted?0:1;if(muted)stopEffects();syncMusic();if(!muted)tone({frequency:520,end:760,duration:.08,type:'sine',gain:.05});return muted;},
   navigate(){tone({frequency:310,end:350,duration:.045,type:'square',gain:.025});},
   confirm(){tone({frequency:420,end:720,duration:.09,type:'triangle',gain:.05});},
-  move(){tone({frequency:66,end:52,duration:.055,type:'sawtooth',gain:.018});},
+  move(material={}){tone({frequency:material.water?190:material.glide?120:material.snow?310:material.name==='沙滩'?92:66,end:material.water?75:material.glide?90:material.snow?140:52,duration:material.snow?.09:.065,type:material.glide?'sine':material.water||material.snow?'triangle':'sawtooth',gain:.018});},
   fire(weapon='calibration'){sample(weapon);},
-  explode(weapon='calibration'){sample(weapon,true);if(weapon==='quake')this.burn();else if(weapon==='drill')this.fissure();else if(weapon==='pulse')this.gravity();},
+  explode(weapon='calibration',material){if(['shallow','deep'].includes(material)){tone({frequency:310,end:45,duration:.4,type:'triangle',gain:.07});return;}if(['snow','ice'].includes(material))tone({frequency:1250,end:310,duration:.17,type:'sine',gain:.03});sample(weapon,true);if(weapon==='quake'&&!['snow','ice'].includes(material))this.burn();else if(weapon==='drill')this.fissure();else if(weapon==='pulse')this.gravity();},
   bounce(){[260,390,560].forEach((f,i)=>tone({frequency:f,end:f*.72,duration:.08,type:'square',gain:.035,delay:i*.035}));},
   burn(){tone({frequency:120,end:58,duration:.24,type:'sawtooth',gain:.055});tone({frequency:420,end:180,duration:.16,type:'triangle',gain:.025,delay:.06});},
   fissure(){tone({frequency:82,end:34,duration:.34,type:'sawtooth',gain:.065});},

@@ -129,8 +129,8 @@ async function main(){
     await waitFor(`document.querySelectorAll('.game-card').length === 6`);
     await waitFor(`document.querySelector('.steel-arc-art img')?.complete && document.querySelector('.steel-arc-art img')?.naturalWidth > 0`);
     const lobby=await evaluate(`(()=>{const card=document.querySelector('.game-card--steel-arc');const image=card.querySelector('img');return {cards:document.querySelectorAll('.game-card').length,title:card.querySelector('h3').textContent.trim(),subtitle:card.querySelector('.eyebrow').textContent.trim(),cover:[image.naturalWidth,image.naturalHeight],href:card.querySelector('.primary').getAttribute('href')};})()`);
-    assert.deepEqual(lobby,{cards:6,title:'钢铁远征',subtitle:'STEEL EXPEDITION',cover:[1672,941],href:'/games/steel-arc/index.html'});
-    record('大厅显示六款游戏、钢铁远征新名称与 1672×941 正式封面',lobby);
+    assert.deepEqual(lobby,{cards:6,title:'钢铁远征',subtitle:'STEEL EXPEDITION',cover:[2172,724],href:'/games/steel-arc/index.html'});
+    record('大厅显示六款游戏、钢铁远征新名称与 2172×724 正式封面',lobby);
 
     await clickSelector('.game-card--steel-arc .primary');
     await waitFor(`location.pathname === '/games/steel-arc/index.html' && document.querySelector('#overlay-title') && document.querySelector('#menu button[data-action="start"]')`);

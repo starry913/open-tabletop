@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import {mkdir,mkdtemp} from 'node:fs/promises';
+import {createRequire} from 'node:module';
+import {createTabletopServer} from '../server/index.mjs';
+const require=createRequire(process.env.PLAYWRIGHT_MODULE_PATH||import.meta.url),{chromium}=require('playwright');
+await mkdir('_qa/steel-practice-ui',{recursive:true});
+const app=await createTabletopServer({dataDir:await mkdtemp('_qa/steel-practice-ui/data-')});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));let browser;
+try{
+ browser=await chromium.launch({channel:'msedge',headless:true});const p=await browser.newPage({viewport:{width:1440,height:900}}),errors=[];p.on('pageerror',e=>errors.push(e.message));
+ await p.route('**/renderer.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('function setFrame(frame){','function setFrame(frame){window.__qaFrame=frame;')});});
+ await p.goto(`http://127.0.0.1:${app.server.address().port}/games/steel-arc/`);
+ await p.locator('#battle-map').selectOption('range');assert.equal(await p.locator('[data-action="start"]').textContent(),'进入试射场');assert.ok(await p.locator('#ai-difficulty').isHidden());
+ await p.locator('[data-action="start"]').click();await p.waitForFunction(()=>!document.querySelector('#fire-button').disabled);assert.equal(await p.locator('#practice-map').inputValue(),'range');assert.equal(await p.evaluate(()=>window.__qaFrame.state.practice),true);
+ await p.locator('#pause-button').click();await p.locator('[data-action="title"]').click();await p.locator('#battle-map').selectOption('bay');assert.equal(await p.locator('[data-action="start"]').textContent(),'开始对战');assert.ok(await p.locator('#ai-difficulty').isVisible());
+ await p.locator('[data-action="practice"]').click();await p.waitForFunction(()=>!document.querySelector('#fire-button').disabled);
+ await p.locator('#practice-map').selectOption('bay');await p.waitForFunction(()=>!document.querySelector('#fire-button').disabled);
+ const box=await p.locator('.practice-map-switch').boundingBox();assert.ok(box.x>900&&box.y<240);
+ await p.screenshot({path:'_qa/steel-practice-ui/practice.png'});
+ await p.locator('#practice-map').selectOption('range');await p.waitForFunction(()=>!document.querySelector('#fire-button').disabled);await p.waitForTimeout(2200);
+ assert.equal(await p.locator('#practice-map option').count(),7);
+ await p.screenshot({path:'_qa/steel-practice-ui/tidal-range.png'});
+ const read=()=>p.evaluate(()=>{const s=window.__qaFrame.state;return {seed:s.seed,distance:s.terrain.rangeTarget.distance,x:s.tanks.player.x,points:s.terrain.points};});const initial=await read();
+ const frames=await p.evaluate(()=>new Promise(resolve=>{const deltas=[];let last=performance.now();function tick(t){deltas.push(t-last);last=t;if(deltas.length<121)requestAnimationFrame(tick);else resolve(deltas.slice(1).sort((a,b)=>a-b));}requestAnimationFrame(tick);}));console.log({rangeFrameMedianMs:frames[60],rangeFrameP95Ms:frames[114],framesOver50ms:frames.filter(t=>t>50).length});
+ await p.locator('#fire-button').click();await p.waitForFunction(()=>document.querySelector('#fire-button').disabled);await p.waitForFunction(()=>!document.querySelector('#fire-button').disabled,{},{timeout:25000});
+ await p.locator('#practice-reset').click();await p.waitForFunction(()=>!document.querySelector('#fire-button').disabled);assert.deepEqual(await read(),initial);
+ await p.locator('#practice-new').click();await p.waitForFunction(()=>!document.querySelector('#fire-button').disabled);const next=await read();assert.ok(Math.abs(next.distance-initial.distance)>=300);
+ await p.locator('#practice-auto').check();await p.locator('#fire-button').click();await p.waitForTimeout(200);assert.equal((await read()).seed,next.seed);
+ await p.waitForFunction(seed=>window.__qaFrame.state.seed!==seed,next.seed,{timeout:25000});await p.waitForFunction(()=>!document.querySelector('#fire-button').disabled);assert.ok(Math.abs((await read()).distance-next.distance)>=300);await p.locator('#practice-auto').uncheck();
+ console.log({exactReset:true,newDistance:true,autoAfterShot:true});
+ await p.locator('#pause-button').click();await p.locator('[data-action="resume"]').waitFor({state:'visible'});
+ await p.keyboard.press('Escape');await p.waitForFunction(()=>!document.querySelector('#fire-button').disabled);
+ await p.locator('#pause-button').click();await p.locator('[data-action="title"]').click();await p.locator('[data-action="practice"]').waitFor({state:'visible'});assert.ok(await p.locator('#practice-map').isHidden());
+ await p.locator('[data-action="practice"]').click();await p.waitForFunction(()=>!document.querySelector('#fire-button').disabled);await p.locator('#pause-button').click();await p.locator('[data-action="exit"]').click();await p.waitForURL(`http://127.0.0.1:${app.server.address().port}/`);
+ assert.deepEqual(errors,[]);console.log({mapSwitch:true,mousePause:true,escapeResume:true,exitToTitle:true,exitToCollection:true,errors});
+}finally{await browser?.close();await new Promise(r=>app.server.close(r));}

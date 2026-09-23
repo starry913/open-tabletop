@@ -1,3 +1,4 @@
+import {enterDuelFixture} from './room-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {MemorySteelArcRoomStore,SteelArcRoomService,TURN_MS} from '../server/rooms.mjs';
@@ -28,7 +29,7 @@ test('1v1 contains no phantom tanks and host transfers after leaving',async()=>{
   await service.request(code,owner.token,'leave');
   const room=await service.request(code,guest.token,'state');
   assert.equal(room.room.isOwner,true);assert.equal(room.game.tanks.A1.ai,true);
-  assert.notEqual(room.game.turn,'A1');
+  assert.notEqual(room.game.phase==='calibration'?room.game.calibration.turn:room.game.turn,'A1');
 });
 test('friend room starts with no AI and exposes four selectable seats',async()=>{
   const service=new SteelArcRoomService(new MemorySteelArcRoomStore(),()=>1000);const owner=await service.create({name:'Owner'}),code=owner.room.code;const guest=await service.request(code,'','join',{name:'Guest',seatKey:seatKey(1)});
@@ -37,6 +38,30 @@ test('friend room starts with no AI and exposes four selectable seats',async()=>
 test('players choose exact slots and occupied slots are rejected',async()=>{const service=new SteelArcRoomService(new MemorySteelArcRoomStore(),()=>1500);const owner=await service.create({name:'One'}),code=owner.room.code;const guest=await service.request(code,'','join',{name:'Two',seatKey:seatKey(2)});await assert.rejects(()=>service.request(code,guest.token,'team',{slot:'A1'}));const moved=await service.request(code,guest.token,'team',{slot:'B2'});assert.equal(moved.room.selfSlot,'B2');});
 test('AI seats participate in fixed A1 B1 A2 B2 order',async()=>{const service=new SteelArcRoomService(new MemorySteelArcRoomStore(),()=>2000);const owner=await service.create({name:'A1'}),code=owner.room.code;const b1=await service.request(code,'','join',{name:'B1',seatKey:seatKey(3)});await service.request(code,owner.token,'ai',{slot:'A2',enabled:true});await service.request(code,owner.token,'ai',{slot:'B2',enabled:true});await ready(service,code,b1);const started=await service.request(code,owner.token,'start',{});assert.deepEqual(started.game.turnOrder,['A1','B1','A2','B2']);});
 test('one human can start against one AI',async()=>{const service=new SteelArcRoomService(new MemorySteelArcRoomStore(),()=>3000);const owner=await service.create({name:'Solo'}),code=owner.room.code;await service.request(code,owner.token,'ai',{slot:'B1',enabled:true});const started=await service.request(code,owner.token,'start',{});assert.deepEqual(started.game.turnOrder,['A1','B1']);assert.equal(started.game.tanks.B1.ai,true);});
+test('rematch requires every human confirmation and host starts a new calibration',async()=>{
+  const service=new SteelArcRoomService(new MemorySteelArcRoomStore()),owner=await service.create({name:'Host'}),code=owner.room.code;
+  const guest=await service.request(code,'','join',{name:'Guest',seatKey:seatKey(31)});await ready(service,code,guest);await service.request(code,owner.token,'start',{});
+  const stored=await service.store.get(code,Date.now());stored.room.status='finished';stored.room.engine.phase='ended';await service.store.cas(code,stored.revision,stored.room,stored.expiresAt);
+  const rematch=await service.request(code,guest.token,'rematch',{});
+  assert.equal(rematch.room.status,'finished');assert.equal(rematch.room.selfReady,true);
+  await assert.rejects(()=>service.request(code,owner.token,'start',{}),{status:409});
+  await service.request(code,owner.token,'rematch',{});
+  await assert.rejects(()=>service.request(code,guest.token,'start',{}),{status:403});
+  const next=await service.request(code,owner.token,'start',{});assert.equal(next.room.status,'playing');assert.equal(next.game.phase,'calibration');assert.deepEqual(next.game.calibration.shots,{});assert.equal(next.room.selfReady,false);
+});
+
+test('two teammates must both surrender; one-player team surrenders immediately',async()=>{
+  const service=new SteelArcRoomService(new MemorySteelArcRoomStore()),owner=await service.create({name:'Host'}),code=owner.room.code;
+  const teammate=await service.request(code,'','join',{name:'Mate',seatKey:seatKey(61)});
+  await service.request(code,teammate.token,'team',{slot:'A2'});
+  const enemy=await service.request(code,'','join',{name:'Enemy',seatKey:seatKey(62)});
+  await ready(service,code,teammate);await ready(service,code,enemy);await service.request(code,owner.token,'start');
+  const first=await service.request(code,owner.token,'surrender');assert.equal(first.room.status,'playing');assert.equal(first.room.selfSurrendered,true);
+  const lost=await service.request(code,teammate.token,'surrender');assert.equal(lost.room.status,'finished');assert.equal(lost.game.winner,'B');
+  for(const player of [owner,teammate,enemy])await service.request(code,player.token,'rematch');
+  const next=await service.request(code,owner.token,'start');assert.equal(next.room.selfSurrendered,false);
+  const won=await service.request(code,enemy.token,'surrender');assert.equal(won.room.status,'finished');assert.equal(won.game.winner,'A');
+});
 test('a room needs both teams and at least two enabled seats',async()=>{const service=new SteelArcRoomService(new MemorySteelArcRoomStore(),()=>4000);const owner=await service.create({name:'Solo'}),code=owner.room.code;await assert.rejects(()=>service.request(code,owner.token,'start',{}),/至少需要启用/);await service.request(code,owner.token,'ai',{slot:'A2',enabled:true});await assert.rejects(()=>service.request(code,owner.token,'start',{}),/双方都需要/);});
 
 test('lost and concurrent create responses recover one room with the same seat key',async()=>{
@@ -54,7 +79,7 @@ test('a duplicate action after its deadline cannot return an unpersisted timeout
   let now=1000;const store=new MemorySteelArcRoomStore(),service=new SteelArcRoomService(store,()=>now);
   const host=await service.create({name:'Host'}),code=host.room.code;
   const guest=await service.request(code,'','join',{name:'Guest',seatKey:seatKey(51)});
-  await ready(service,code,guest);const started=await service.request(code,host.token,'start');
+  await ready(service,code,guest);await service.request(code,host.token,'start');const started=await enterDuelFixture(service,code,host.token,now);
   const body={type:'aim',heading:45,power:60,version:started.room.version,requestId:'stable-aim-0001'};
   const first=await service.request(code,host.token,'action',body);
   now+=TURN_MS+1;
